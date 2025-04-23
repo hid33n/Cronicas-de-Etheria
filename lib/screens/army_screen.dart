@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/army_viewmodel.dart';
-import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/auth/auth_viewmodel.dart';
 import '../data/unit_catalog.dart';
 
 class ArmyScreen extends StatelessWidget {

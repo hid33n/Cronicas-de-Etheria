@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:guild/screens/barracks/barracks_screen.dart';
 import 'package:guild/screens/homescreen/widgets/pvp_dialog.dart';
 import 'package:guild/services/audio_services.dart';
-import 'package:guild/viewmodels/auth_viewmodel.dart';
+import 'package:guild/viewmodels/auth/auth_viewmodel.dart';
 import 'package:provider/provider.dart';
 import 'package:guild/models/building_type.dart';
 import 'package:guild/viewmodels/buildings/building_viewmodel.dart';

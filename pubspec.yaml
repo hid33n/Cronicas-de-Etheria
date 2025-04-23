@@ -49,6 +49,7 @@ dependencies:
   flutter_native_splash:
   ionicons: ^0.2.2
   icony: ^1.0.5
+  firebase_database: ^11.3.5
 dev_dependencies:
   flutter_test:
     sdk: flutter

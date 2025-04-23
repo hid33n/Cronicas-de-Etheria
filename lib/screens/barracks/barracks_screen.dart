@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:guild/data/unit_catalog.dart';
 import 'package:guild/models/unit_type.dart';
-import 'package:guild/viewmodels/auth_viewmodel.dart';
+import 'package:guild/viewmodels/auth/auth_viewmodel.dart';
 import 'package:guild/viewmodels/barracks_viewmodel.dart';
 
 class BarracksScreen extends StatefulWidget {
