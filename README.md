@@ -40,7 +40,7 @@
 - **Flutter & Dart**: UI nativa en Android, iOS y Web.
 - **Provider**: Gestión de estado simple y eficiente.
 - **Firebase Firestore**: Base de datos NoSQL en tiempo real.
-- **Cloud Functions (opcional)**: Lógica de batalla y reportes.
+- **Cloud Functions**: Lógica de batalla y reportes.
 
 ---
 
