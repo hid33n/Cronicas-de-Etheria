@@ -5,6 +5,8 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:guild/data/building_catalog.dart';
+import 'package:guild/data/unit_catalog.dart';
+import 'package:guild/models/unit_type.dart';
 
 class BuildingViewModel extends ChangeNotifier {
   final _userCol = FirebaseFirestore.instance.collection('users');
@@ -252,6 +254,14 @@ Future<void> collectResources(String uid) async {
   notifyListeners();
 }
 
+/// Obtiene las unidades disponibles para la raza [race]:
+/// - Incluye las que tienen requiredRace == null (neutrales)
+/// - Y las que tienen requiredRace == race (exclusivas)
+List<UnitType> getUnitsForRace(String race) {
+  return kUnitCatalog.values
+    .where((u) => u.requiredRace == null || u.requiredRace == race)
+    .toList();
+}
 
 
   @override
