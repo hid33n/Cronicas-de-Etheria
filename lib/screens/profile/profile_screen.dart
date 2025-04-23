@@ -82,26 +82,50 @@ class ProfileScreen extends StatelessWidget {
                         style:
                             TextStyle(color: Colors.white70, fontSize: 16)),
                     const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(race.emoji, style: TextStyle(fontSize: 28)),
-                        const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(race.name,
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text('Elo: ${user.eloRating}',
-                                style: TextStyle(
-                                    color: Colors.amber, fontSize: 14)),
-                          ],
-                        ),
-                      ],
-                    ),
+                  Row(
+  mainAxisAlignment: MainAxisAlignment.center,
+  children: [
+
+    const SizedBox(width: 8),
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 4),
+        Text(
+  '🏆 ${user.eloRating}',
+  style: TextStyle(
+    color: Colors.amber,
+    fontSize: 14,
+  ),
+),
+
+      ],
+    ),
+  ],
+),
+
+const SizedBox(height: 12),
+
+// — Imagen de la raza —
+if (race.assetPath.isNotEmpty)
+  Image.asset(
+    race.assetPath,
+    width: 80,
+    height: 80,
+  ),
+
+const SizedBox(height: 8),
+
+// — Nombre de la raza —
+Text(
+  race.name,
+  textAlign: TextAlign.center,
+  style: TextStyle(
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: FontWeight.bold,
+  ),
+),
                   ],
                 ),
               ),
