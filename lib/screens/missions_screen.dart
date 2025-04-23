@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:guild/viewmodels/auth_viewmodel.dart';
+import 'package:guild/viewmodels/auth/auth_viewmodel.dart';
 import 'package:guild/viewmodels/mission_viewmodel.dart';
 import 'package:guild/viewmodels/inventory_viewmodel.dart';
 

@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:guild/models/item_model.dart';
 import 'package:guild/models/mission_model.dart';
-import 'package:guild/viewmodels/auth_viewmodel.dart';
+import 'package:guild/viewmodels/auth/auth_viewmodel.dart';
 import 'package:guild/viewmodels/inventory_viewmodel.dart';
 
 class MissionViewModel extends ChangeNotifier {

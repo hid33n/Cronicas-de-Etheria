@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:guild/screens/global_chat_message.dart';
 import 'package:provider/provider.dart';
 import 'package:guild/data/building_catalog.dart';
-import 'package:guild/viewmodels/auth_viewmodel.dart';
+import 'package:guild/viewmodels/auth/auth_viewmodel.dart';
 import 'package:guild/viewmodels/buildings/building_viewmodel.dart';
 import 'package:guild/screens/homescreen/widgets/building_dialog.dart';
 import 'package:guild/screens/homescreen/widgets/res_chip.dart';

@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:guild/data/unit_catalog.dart';
 import 'package:provider/provider.dart';
-import 'package:guild/viewmodels/auth_viewmodel.dart';
+import 'package:guild/viewmodels/auth/auth_viewmodel.dart';
 import 'package:guild/viewmodels/battle_viewmodel.dart';
 import 'package:guild/models/unit_type.dart';
 

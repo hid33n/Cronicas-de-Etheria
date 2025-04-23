@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:guild/screens/blog_screen.dart';
 import 'package:guild/screens/pvp_info_screen.dart';
 import 'package:provider/provider.dart';
-import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/auth/auth_viewmodel.dart';
 import 'homescreen/home_screen.dart';
 import 'guild_list_screen.dart';
 import 'missions_screen.dart';

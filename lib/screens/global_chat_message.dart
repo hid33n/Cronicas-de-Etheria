@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../viewmodels/chat_viewmodel.dart';
-import '../../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/auth/auth_viewmodel.dart';
 
 class GlobalChatWidget extends StatefulWidget {
   const GlobalChatWidget({super.key});

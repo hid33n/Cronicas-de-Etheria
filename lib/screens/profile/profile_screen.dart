@@ -4,7 +4,7 @@ import 'package:guild/screens/profile/avatar_picker_dialog.dart';
 import 'package:guild/viewmodels/inventory_viewmodel.dart';
 
 import 'package:provider/provider.dart';
-import '../../viewmodels/auth_viewmodel.dart';
+import '../../viewmodels/auth/auth_viewmodel.dart';
 
 class ProfileScreen extends StatelessWidget {
   @override

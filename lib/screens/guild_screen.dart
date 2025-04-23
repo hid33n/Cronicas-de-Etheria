@@ -3,7 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/auth/auth_viewmodel.dart';
 import '../viewmodels/guild_viewmodel.dart';
 import '../viewmodels/chat_viewmodel.dart';
 import 'city_chat_screen.dart';

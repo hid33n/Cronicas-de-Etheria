@@ -1,7 +1,7 @@
 // lib/screens/buildings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/auth/auth_viewmodel.dart';
 import '../viewmodels/buildings/building_viewmodel.dart';
 import '../data/building_catalog.dart';
 

@@ -1,7 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:guild/models/item_model.dart';
-import 'package:guild/viewmodels/auth_viewmodel.dart';
+import 'package:guild/viewmodels/auth/auth_viewmodel.dart';
 
 class InventoryViewModel extends ChangeNotifier {
   final List<ItemModel> _items = [];
