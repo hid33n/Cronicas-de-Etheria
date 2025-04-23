@@ -159,7 +159,6 @@ Future<void> signUp(String name, String email, String password, String raceId) a
       'email':     email.trim(),
       'cityId':    null,
       'gold':      0,
-      'rank':      'Ciudadano',
       'race':      raceId,
       'avatarUrl': '',
       'missionsCompleted': 0,
@@ -184,7 +183,6 @@ Future<void> signUp(String name, String email, String password, String raceId) a
       avatarUrl: '',
       cityId:    null,
       gold:      0,
-      rank:      'Ciudadano',
       race:      raceId,
       missionsCompleted: 0,
       eloRating: 1000,
@@ -228,7 +226,6 @@ Future<void> _loadUserFromFirestore(String uid) async {
       'avatarUrl': '',
       'cityId': null,
       'gold': 0,
-      'rank': 'Ciudadano',
       'race': defaultRace,
       'missionsCompleted': 0,
       'eloRating': 1000,
@@ -241,7 +238,6 @@ Future<void> _loadUserFromFirestore(String uid) async {
       avatarUrl: '',
       cityId: null,
       gold: 0,
-      rank: 'Ciudadano',
       race: defaultRace,
       missionsCompleted: 0,
       achievements: [],
@@ -261,7 +257,6 @@ Future<void> _loadUserFromFirestore(String uid) async {
     avatarUrl: data['avatarUrl'] as String? ?? '',
     cityId: data['cityId'] as String?,
     gold: data['gold'] as int? ?? 0,
-    rank: data['rank'] as String? ?? 'Ciudadano',
     race: storedRace,
     missionsCompleted: data['missionsCompleted'] as int? ?? 0,
     achievements: List<String>.from(data['achievements'] as List? ?? []),
@@ -271,38 +266,48 @@ Future<void> _loadUserFromFirestore(String uid) async {
 }
 
 
-  /// Método interno para actualizar un campo en Firestore y en el modelo local.
   Future<void> _updateField<T>(String field, T value) async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return;
-    try {
-      await _firestore.collection('users').doc(uid).update({field: value});
-      switch (field) {
-        case 'cityId':
-          _user?.cityId = value as String?;
-          break;
-        case 'gold':
-          _user?.gold   = value as int;
-          break;
-        case 'rank':
-          _user?.rank   = value as String;
-          break;
-        case 'avatarUrl':
-          _user?.avatarUrl = value as String;
-          break;
-         case 'missionsCompleted':
-       _user?.missionsCompleted = value as int;
-       break;
-     case 'achievements':
-       _user?.achievements = List<String>.from(value as List);
-       break;
-       case 'race': _user?.race = value as String; break;
+  final uid = _auth.currentUser?.uid;
+  if (uid == null) return;
+  try {
+    // 1) Subo SOLO el campo solicitado
+    await _firestore.collection('users').doc(uid).update({ field: value });
+
+    // 2) Actualizo el modelo local según el campo
+    switch (field) {
+      case 'cityId':
+        _user?.cityId = value as String?;
+        break;
+      case 'gold':
+        _user?.gold = value as int;
+        break;
+      case 'avatarUrl':
+        _user?.avatarUrl = value as String;
+        break;
+      case 'missionsCompleted':
+        _user?.missionsCompleted = value as int;
+        break;
+      case 'achievements':
+        _user?.achievements = List<String>.from(value as List);
+        break;
+      case 'race':
+        _user?.race = value as String;
+        break;
+
+      // ← Nuevo: manejo de cambios de Elo
+      case 'eloRating':
+        _user?.eloRating = value as int;
+        break;
+
+      // ← Elimino el case 'rank'
     }
-      notifyListeners();
-    } catch (e) {
-      debugPrint('AuthViewModel: error al actualizar $field: $e');
-    }
+
+    notifyListeners();
+  } catch (e) {
+    debugPrint('AuthViewModel: error al actualizar $field: $e');
   }
+}
+
    /// Incrementa el contador de misiones completadas en 1
  Future<void> incrementMissionsCompleted() =>
      _updateField<int>('missionsCompleted', (_user?.missionsCompleted ?? 0) + 1);
