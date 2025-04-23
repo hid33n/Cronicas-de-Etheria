@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "716390599022",
+    "project_id": "guild-f42e3",
+    "storage_bucket": "guild-f42e3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:716390599022:android:9066975c645f71a8ea197f",
+        "android_client_info": {
+          "package_name": "com.rodrigguild.guild"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCT44UK8DW06FfsPSuhzNLzc11hx6OQNOM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
