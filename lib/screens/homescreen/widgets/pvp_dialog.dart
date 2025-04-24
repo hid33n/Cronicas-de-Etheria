@@ -4,7 +4,6 @@ import 'package:guild/data/unit_catalog.dart';
 import 'package:provider/provider.dart';
 import 'package:guild/viewmodels/auth/auth_viewmodel.dart';
 import 'package:guild/viewmodels/battle_viewmodel.dart';
-import 'package:guild/models/unit_type.dart';
 
 class PvpDialog extends StatefulWidget {
   const PvpDialog({Key? key}) : super(key: key);
@@ -181,67 +180,6 @@ Widget build(BuildContext context) {
 }
 
 
-  Widget _unitCard(
-    UnitType u,
-    int maxQty,
-    int selQty,
-    ValueChanged<int> onQtyChanged,
-  ) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[850],
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        children: [
-          // Imagen
-          Expanded(
-            child: Image.asset(
-              u.imagePath,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) =>
-                  Text(u.emoji, style: const TextStyle(fontSize: 36)),
-            ),
-          ),
-          const SizedBox(height: 4),
-          // Nombre
-          Text(u.name, style: const TextStyle(color: Colors.white)),
-          const SizedBox(height: 4),
-          // Stats
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('🗡️${u.atk}', style: const TextStyle(color: Colors.white70)),
-              const SizedBox(width: 6),
-              Text('🛡️${u.def}', style: const TextStyle(color: Colors.white70)),
-              const SizedBox(width: 6),
-              Text('❤️${u.hp}', style: const TextStyle(color: Colors.white70)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          // Disponibles
-          Text('Disp: $maxQty', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-          const SizedBox(height: 4),
-          // Selector de cantidad
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.remove, size: 20, color: Colors.white70),
-                onPressed: selQty > 0 ? () => onQtyChanged(selQty - 1) : null,
-              ),
-              Text('$selQty', style: const TextStyle(color: Colors.white)),
-              IconButton(
-                icon: const Icon(Icons.add, size: 20, color: Colors.white70),
-                onPressed: selQty < maxQty ? () => onQtyChanged(selQty + 1) : null,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   void _startBattle() {
     final uid = context.read<AuthViewModel>().user!.id;

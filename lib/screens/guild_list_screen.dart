@@ -114,7 +114,7 @@ class _GuildListScreenState extends State<GuildListScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              g.description ?? 'Sin descripción',
+              g.description,
               style: const TextStyle(
                 color: Colors.white60,
                 fontSize: 13,

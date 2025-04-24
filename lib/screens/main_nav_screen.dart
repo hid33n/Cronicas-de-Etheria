@@ -1,7 +1,6 @@
 // lib/screens/main_nav_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:guild/screens/blog_screen.dart';
 import 'package:guild/screens/pvp_info_screen.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/auth/auth_viewmodel.dart';
