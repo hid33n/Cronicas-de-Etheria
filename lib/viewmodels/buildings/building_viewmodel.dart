@@ -22,7 +22,18 @@ class BuildingViewModel extends ChangeNotifier {
 
   StreamSubscription? _bSub;
   StreamSubscription? _rSub;
+  int maxConcurrentUpgrades = 2;
 
+    int get pendingUpgradeCount {
+    final now = DateTime.now();
+    return _queue.values
+      .where((dt) => dt != null && dt!.isAfter(now))
+      .length;
+  }
+
+  /// Indica si podemos arrancar una nueva mejora.
+  bool get canStartUpgrade =>
+    pendingUpgradeCount < maxConcurrentUpgrades;
   /// Escucha niveles, cola de mejoras y recursos para un usuario
   void listenData(String uid) {
     _bSub?.cancel();
@@ -80,6 +91,11 @@ class BuildingViewModel extends ChangeNotifier {
   final timeSecs       = bType.baseCostTime * nextLevel;
   final readyDateTime  = DateTime.now().add(Duration(seconds: timeSecs));
   final readyTimestamp = Timestamp.fromDate(readyDateTime);
+   // ── 1) Control de límite ─────────────────
+    if (!canStartUpgrade) {
+      return '🚧 Solo puedes mejorar hasta '
+           '$maxConcurrentUpgrades edificios a la vez.';
+    }
 
   // 1) Optimistic UI: dibujo la cola inmediatamente
   _queue[buildingId] = readyDateTime;
