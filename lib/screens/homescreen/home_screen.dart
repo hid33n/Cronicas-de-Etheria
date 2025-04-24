@@ -49,12 +49,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final prod   = bldVm.productionPerHour;
     final topPad = MediaQuery.of(context).padding.top + 8;
 
+    // Calculo actual de mejoras en curso
+    final upgrades = bldVm.upgradeTimeLeft;
+
     return Scaffold(
       body: Stack(fit: StackFit.expand, children: [
         // ─── MAPA FULLSCREEN ─────────────────────────
         Image.asset(
           'assets/images/terrain_bg.png',
-          fit: BoxFit.fill,             // ⚠️ llena todo, sin mantener ratio
+          fit: BoxFit.fill,
           filterQuality: FilterQuality.high,
         ),
 
@@ -74,14 +77,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     margin: const EdgeInsets.only(bottom: 4),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Text(b.name,
-                        style: const TextStyle(color: Colors.white, fontSize: 11)),
+                    child: Text(
+                      b.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                      ),
+                    ),
                   ),
                   Image.asset(
                     b.assetPath,
@@ -90,15 +99,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 4),
-                if (b.id != 'coliseo')
-  Text('Lv $lvl',
-    style: const TextStyle(
-      color: Colors.amberAccent,
-      fontSize: 11,
-      fontStyle: FontStyle.italic,
-    ),
-  ),
-
+                  if (b.id != 'coliseo')
+                    Text(
+                      'Lv $lvl',
+                      style: const TextStyle(
+                        color: Colors.amberAccent,
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -122,14 +131,53 @@ class _HomeScreenState extends State<HomeScreen> {
                   qty: bldVm.resources['stone'] ?? 0,
                   perHour: prod['stonemine'] ?? 0),
               ResChip.minimal('assets/resources/food.png',
-                  qty: bldVm.resources['food'] ?? 0, perHour: prod['farm'] ?? 0),
+                  qty: bldVm.resources['food'] ?? 0,
+                  perHour: prod['farm'] ?? 0),
               ResChip.minimal('assets/resources/gold.png',
                   qty: user.gold, perHour: 0),
             ],
           ),
         ),
-          // ─── CHAT GLOBAL ────────────────────────
-      const GlobalChatWidget(), // 👈 Esto ya es Positioned internamente
+
+        // ─── INDICADOR DE MEJORAS ────────────────────
+        if (upgrades.isNotEmpty)
+          Positioned(
+            top: topPad + 48,
+            left: 16,
+            right: 16,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: upgrades.entries.map((e) {
+                    final b = kBuildingCatalog[e.key]!;
+                    final rem = e.value;
+                    final mm = rem.inMinutes.remainder(60).toString().padLeft(2, '0');
+                    final ss = rem.inSeconds.remainder(60).toString().padLeft(2, '0');
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 16),
+                      child: Text(
+                        '🔧 ${b.name}: $mm:$ss',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+
+        // ─── CHAT GLOBAL ────────────────────────
+        const GlobalChatWidget(),
       ]),
     );
   }
