@@ -2,9 +2,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
-
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 
@@ -14,7 +12,7 @@ import 'firebase_options.dart';
 import 'package:guild/viewmodels/auth/auth_service.dart';
 import 'package:guild/viewmodels/auth/avatar_service.dart';
 import 'package:guild/viewmodels/auth/user_repository.dart';
-import 'services/audio_services.dart';
+import 'package:guild/services/audio_services.dart'; // AudioService
 
 // ViewModels
 import 'viewmodels/auth/auth_viewmodel.dart';
@@ -63,6 +61,7 @@ void main() async {
         Provider(create: (_) => AuthService()),
         Provider(create: (_) => UserRepository()),
         Provider(create: (_) => AvatarService()),
+        // AudioService: se lanza playBackground() al crear
         Provider(create: (_) => AudioService()..playBackground()),
 
         // --- ViewModels ---
@@ -84,62 +83,9 @@ void main() async {
         ChangeNotifierProvider(create: (_) => BuildingViewModel()),
         ChangeNotifierProvider(create: (_) => BattleViewModel()),
       ],
-      child: const MusicApp(child: MyApp()),
+      child: const MyApp(),
     ),
   );
-}
-
-class MusicApp extends StatefulWidget {
-  final Widget child;
-  const MusicApp({required this.child, Key? key}) : super(key: key);
-
-  @override
-  State<MusicApp> createState() => _MusicAppState();
-}
-
-class _MusicAppState extends State<MusicApp> with WidgetsBindingObserver {
-  late final AudioPlayer _player;
-  bool _pausedByLifecycle = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-
-    _player = AudioPlayer(playerId: 'background_music')
-      ..setReleaseMode(ReleaseMode.loop)
-      ..play(AssetSource('sounds/themesound.mp3'), volume: 0.3);
-
-    _player.onPlayerStateChanged.listen((state) {
-      if (state == PlayerState.stopped && !_pausedByLifecycle && mounted) {
-        _player.play(AssetSource('sounds/themesound.mp3'), volume: 0.3);
-      }
-    });
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _pausedByLifecycle = false;
-      _player.resume();
-    } else if (state == AppLifecycleState.paused ||
-               state == AppLifecycleState.inactive) {
-      _pausedByLifecycle = true;
-      _player.pause();
-    }
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _player.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return widget.child;
-  }
 }
 
 class MyApp extends StatelessWidget {

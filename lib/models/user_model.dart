@@ -18,7 +18,7 @@ class UserModel {
   int missionsCompleted;
   List<String> achievements;
   List<ItemModel> inventory;
-
+DateTime? lastNameChange;
   UserModel({
     required this.id,
     required this.name,
@@ -30,6 +30,8 @@ class UserModel {
     this.gold = 0,
     List<ItemModel>? inventory,
     required this.race,
+    this.lastNameChange,
+
   })  : achievements = achievements ?? [],
         inventory = inventory ?? [];
 
@@ -45,6 +47,7 @@ class UserModel {
     int? missionsCompleted,
     List<String>? achievements,
     List<ItemModel>? inventory,
+    DateTime? lastNameChange,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -57,6 +60,7 @@ class UserModel {
       gold: gold ?? this.gold,
       inventory: inventory ?? List.from(this.inventory),
       race: race ?? this.race,
+       lastNameChange: lastNameChange ?? this.lastNameChange,
     );
   }
 

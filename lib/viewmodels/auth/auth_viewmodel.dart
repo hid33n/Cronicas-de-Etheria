@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:guild/models/user_model.dart';
 import 'package:guild/viewmodels/auth/auth_service.dart';
@@ -11,6 +12,12 @@ class AuthViewModel extends ChangeNotifier {
   final UserRepository _userRepo;
   final AvatarService _avatarSvc;
   late final PresenceService _presence;
+/// Devuelve `true` si han pasado al menos 14 días desde [lastChangeDate].
+bool canChangeName(DateTime? lastChangeDate) {
+  if (lastChangeDate == null) return true;
+  return DateTime.now().difference(lastChangeDate) >= const Duration(days: 14);
+}
+
 
   UserModel? _user;
   UserModel? get user => _user;
@@ -40,7 +47,29 @@ _presence.goOnline(_user!.name);
   }
 });
  }
+Future<void> changeName(String newName) async {
+  final lastChange = user?.lastNameChange;
+  if (!canChangeName(lastChange)) {
+    throw Exception('Solo puedes cambiar tu nombre cada 14 días.');
+  }
 
+  // 1) Actualiza Firestore: name + fecha servidor
+  await _userRepo.updateFields(
+    _user!.id,
+    {
+      'name': newName,
+      'lastNameChange': FieldValue.serverTimestamp(),
+    },
+  );
+
+  // 2) Actualiza tu modelo local
+  _user = _user!.copyWith(
+    name: newName,
+    lastNameChange: DateTime.now(),
+  );
+
+  notifyListeners();
+}
   Future<void> _loadCurrentUser(String uid) async {
     _user = await _userRepo.loadUser(uid);
     notifyListeners();
