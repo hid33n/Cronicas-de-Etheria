@@ -18,7 +18,7 @@ import 'services/audio_services.dart';
 
 // ViewModels
 import 'viewmodels/auth/auth_viewmodel.dart';
-import 'viewmodels/guild_viewmodel.dart';
+import 'viewmodels/guild/guild_viewmodel.dart';
 import 'viewmodels/mission_viewmodel.dart';
 import 'viewmodels/inventory_viewmodel.dart';
 import 'viewmodels/blog_viewmodel.dart';
@@ -35,9 +35,7 @@ import 'screens/login_screen.dart';
 import 'screens/main_nav_screen.dart';
 import 'screens/homescreen/home_screen.dart';
 import 'screens/guild_list_screen.dart';
-import 'screens/create_guild_screen.dart';
 import 'screens/join_city_screen.dart';
-import 'screens/guild_screen.dart';
 import 'screens/missions_screen.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/blog_screen.dart';
@@ -159,9 +157,7 @@ class MyApp extends StatelessWidget {
         '/main': (_) => MainNavScreen(initialIndex: 2),
         '/home': (_) => HomeScreen(),
         '/map': (_) => GuildListScreen(),
-        '/city_action': (_) => CreateGuildScreen(),
         '/join_city': (_) => JoinCityScreen(),
-        '/city': (_) => GuildScreen(),
         '/missions': (_) => MissionsScreen(),
         '/inventory': (_) => InventoryScreen(),
         '/blog': (_) => BlogScreen(),

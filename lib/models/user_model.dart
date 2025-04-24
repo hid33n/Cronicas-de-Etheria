@@ -33,6 +33,33 @@ class UserModel {
   })  : achievements = achievements ?? [],
         inventory = inventory ?? [];
 
+  /// Copia este UserModel cambiando sólo los campos indicados.
+  UserModel copyWith({
+    String? id,
+    String? name,
+    String? avatarUrl,
+    String? cityId,
+    int? gold,
+    String? race,
+    int? eloRating,
+    int? missionsCompleted,
+    List<String>? achievements,
+    List<ItemModel>? inventory,
+  }) {
+    return UserModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      eloRating: eloRating ?? this.eloRating,
+      missionsCompleted: missionsCompleted ?? this.missionsCompleted,
+      achievements: achievements ?? List.from(this.achievements),
+      cityId: cityId ?? this.cityId,
+      gold: gold ?? this.gold,
+      inventory: inventory ?? List.from(this.inventory),
+      race: race ?? this.race,
+    );
+  }
+
   /// Umbrales de rango con nombres medievales y requisitos más altos
   static const List<RankThreshold> _ranks = [
     RankThreshold('Peón',       0),     // 0–1499
@@ -45,7 +72,6 @@ class UserModel {
   ];
 
   /// Devuelve el rango actual según el Elo.
-  /// Al recorrer una lista constante de tamaño fijo, es muy rápido y seguro para muchos usuarios.
   String get rank {
     return _ranks
       .lastWhere((r) => eloRating >= r.minElo)

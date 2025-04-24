@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/chat_viewmodel.dart';
 import '../viewmodels/auth/auth_viewmodel.dart';
-import '../viewmodels/guild_viewmodel.dart';
+import '../viewmodels/guild/guild_viewmodel.dart';
 
 
 class CityChatScreen extends StatefulWidget {
