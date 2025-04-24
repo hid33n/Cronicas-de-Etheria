@@ -56,13 +56,22 @@ class _BuildingDialogState extends State<BuildingDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final bldVm = context.watch<BuildingViewModel>();
     final nextLevel = widget.level + 1;
     final woodCost = widget.building.baseCostWood * nextLevel;
     final stoneCost = widget.building.baseCostStone * nextLevel;
     final foodCost = widget.building.baseCostFood * nextLevel;
     final secs = widget.building.baseCostTime * nextLevel;
+    final res   = bldVm.resources;
+    final hasWood  = (res['wood']  ?? 0) >= woodCost;
+final hasStone = (res['stone'] ?? 0) >= stoneCost;
+final hasFood  = (res['food']  ?? 0) >= foodCost;
+    final canAfford = hasWood && hasStone && hasFood;
+
     final mins = (secs / 60).ceil();
     final uid = context.read<AuthViewModel>().user!.id;
+final readyAt       = bldVm.queue[widget.building.id];
+  final isUnderUpgrade = readyAt != null && readyAt.isAfter(DateTime.now());
 
     return AlertDialog(
       backgroundColor: Colors.grey[900],
@@ -128,41 +137,46 @@ class _BuildingDialogState extends State<BuildingDialog> {
       const SizedBox(height: 4),
       Text('Tiempo: ⏱️ $mins min', style: const TextStyle(color: Colors.white70)),
       const SizedBox(height: 16),
-     ElevatedButton.icon(
-  icon: const Icon(Icons.upgrade, color: Colors.black87),
-  label: Text('Mejorar a Lv $nextLevel',
-      style: const TextStyle(color: Colors.black87)),
-  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-  onPressed: () {
-    // 1) Cierro el diálogo inmediatamente
-    Navigator.of(context).pop();
-    // 2) Lanzo la mejora en background
-    context.read<BuildingViewModel>()
-      .upgrade(widget.uid, widget.building.id)
-      .then((error) {
-        if (error != null) {
-          // 3) Si hubo fallo, muestro SnackBar
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(error)),
-                ],
+    // ─── BOTÓN DE MEJORA CON ESTADO ─────────────────
+if (isUnderUpgrade)
+  ElevatedButton.icon(
+    onPressed: null,
+    icon: const Icon(Icons.upgrade, color: Colors.grey),
+    label: const Text('Ya mejorando',
+        style: TextStyle(color: Colors.grey)),
+    style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[700]),
+  )
+else if (!canAfford)
+  ElevatedButton.icon(
+    onPressed: null,
+    icon: const Icon(Icons.warning_amber_rounded, color: Colors.grey),
+    label: const Text('Recursos insuficientes',
+        style: TextStyle(color: Colors.grey)),
+    style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[700]),
+  )
+else
+  ElevatedButton.icon(
+    icon: const Icon(Icons.upgrade, color: Colors.black87),
+    label: Text('Mejorar a Lv $nextLevel',
+        style: const TextStyle(color: Colors.black87)),
+    style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+    onPressed: () {
+      Navigator.of(context).pop();
+      context
+        .read<BuildingViewModel>()
+        .upgrade(widget.uid, widget.building.id)
+        .then((error) {
+          if (error != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(error),
+                backgroundColor: Colors.red[600],
               ),
-              backgroundColor: Colors.red[600],
-              duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-          );
-        }
-      });
-  },
-),
-
+            );
+          }
+        });
+    },
+  ),
       if (widget.building.id == 'barracks') ...[
         const SizedBox(height: 12),
         ElevatedButton.icon(
