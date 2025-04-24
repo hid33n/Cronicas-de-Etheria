@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../viewmodels/guild_viewmodel.dart';
+import '../viewmodels/guild/guild_viewmodel.dart';
 import '../viewmodels/auth/auth_viewmodel.dart';
 
 class JoinCityScreen extends StatelessWidget {

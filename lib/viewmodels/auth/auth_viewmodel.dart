@@ -123,9 +123,16 @@ Future<void> loadCurrentUser() async {
         'achievements': [...?_user?.achievements, trophy],
       });
 
-  Future<void> setCityId(String? cityId) =>
-      _userRepo.updateFields(_user!.id, {'cityId': cityId});
+  Future<void> setCityId(String? cityId) async {
+    // 1) Actualiza en tu repositorio remoto
+    await _userRepo.updateFields(_user!.id, {'cityId': cityId});
 
+    // 2) Mutamos directamente el campo cityId del modelo que ya tenemos
+    _user!.cityId = cityId;
+
+    // 3) Avisamos a todos los listeners
+    notifyListeners();
+  }
   Future<void> updateGold(int newGold) =>
       _userRepo.updateFields(_user!.id, {'gold': newGold});
 

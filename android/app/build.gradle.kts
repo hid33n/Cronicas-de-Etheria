@@ -66,3 +66,16 @@ android {
 flutter {
     source = "../.."
 }
+  buildscript {
+    repositories {
+      google()
+      mavenCentral()
+    }
+  }
+
+  allprojects {
+    repositories {
+      google()
+      mavenCentral()
+    }
+  }

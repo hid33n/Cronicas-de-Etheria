@@ -1,20 +1,29 @@
-// lib/screens/create_guild_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:guild/viewmodels/auth/auth_viewmodel.dart';
-import 'package:guild/viewmodels/guild_viewmodel.dart';
+import '../viewmodels/auth/auth_viewmodel.dart';
+import '../viewmodels/guild/guild_viewmodel.dart';
 
-class CreateGuildScreen extends StatefulWidget {
-  @override
-  _CreateGuildScreenState createState() => _CreateGuildScreenState();
+/// Muestra el diálogo de creación de gremio con tamaño aumentado.
+Future<void> showCreateGuildDialog(BuildContext context) async {
+  await showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const _CreateGuildDialog(),
+  );
 }
 
-class _CreateGuildScreenState extends State<CreateGuildScreen> {
-  final _formKey   = GlobalKey<FormState>();
-  final _nameCtrl  = TextEditingController();
-  final _descCtrl  = TextEditingController();
-  bool  _isLoading = false;
+class _CreateGuildDialog extends StatefulWidget {
+  const _CreateGuildDialog({Key? key}) : super(key: key);
+
+  @override
+  _CreateGuildDialogState createState() => _CreateGuildDialogState();
+}
+
+class _CreateGuildDialogState extends State<_CreateGuildDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  bool _isLoading = false;
 
   static const _icons = [
     'assets/guild_icons/icon1.png',
@@ -33,193 +42,193 @@ class _CreateGuildScreenState extends State<CreateGuildScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authVm  = context.read<AuthViewModel>();
+    final authVm = context.read<AuthViewModel>();
     final guildVm = context.read<GuildViewmodel>();
-    final user    = authVm.user!;
+    final user = authVm.user!;
 
-    return Scaffold(
-      backgroundColor: Colors.grey[900],
-      appBar: AppBar(
-        backgroundColor: Colors.black87,
-        elevation: 1,
-        title: Row(
-          children: [
-            Icon(Icons.shield_moon, color: Colors.amber),
-            const SizedBox(width: 8),
-            Text(
-              'Forjar Gremio',
-              style: TextStyle(
-                fontFamily: 'Cinzel',
-                color: Colors.amber,
-                fontSize: 22,
-              ),
+    return AlertDialog(
+      backgroundColor: const Color(0xFF272727),
+      title: Row(
+        children: const [
+          Icon(Icons.shield_moon, color: Colors.amber, size: 24),
+          SizedBox(width: 12),
+          Text(
+            'Forjar Gremio',
+            style: TextStyle(
+              color: Colors.amber,
+              fontFamily: 'Cinzel',
+              fontSize: 20,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+      content: SingleChildScrollView(
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // — Nombre con validación y contador —
-              _buildSectionLabel('Nombre del gremio'),
-              TextFormField(
+              _label('Nombre', Icons.edit),
+              const SizedBox(height: 8),
+              _textField(
                 controller: _nameCtrl,
-                style: const TextStyle(color: Colors.white),
+                hint: 'Ej: Hermanos de Acero',
                 maxLength: 30,
-                decoration: InputDecoration(
-                  counterStyle: TextStyle(color: Colors.white54),
-                  hintText: 'Ej: Hermanos de Acero',
-                  hintStyle: TextStyle(color: Colors.white30),
-                  prefixIcon: Icon(Icons.edit, color: Colors.amber),
-                  filled: true,
-                  fillColor: Colors.grey[800],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'El nombre no puede estar vacío';
-                  }
-                  if (v.trim().length < 3) {
-                    return 'Mínimo 3 caracteres';
-                  }
+                  final t = v?.trim() ?? '';
+                  if (t.isEmpty) return 'Requerido';
+                  if (t.length < 3) return 'Mínimo 3 caracteres';
                   return null;
                 },
-              ),
-              const SizedBox(height: 24),
-
-              // — Descripción con validación y contador —
-              _buildSectionLabel('Descripción'),
-              TextFormField(
-                controller: _descCtrl,
-                style: const TextStyle(color: Colors.white),
-                maxLength: 200,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  counterStyle: TextStyle(color: Colors.white54),
-                  hintText: 'Describe tu gremio…',
-                  hintStyle: TextStyle(color: Colors.white30),
-                  prefixIcon: Icon(Icons.description, color: Colors.amber),
-                  filled: true,
-                  fillColor: Colors.grey[800],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'La descripción es obligatoria';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-
-              // — Preview del estandarte —
-              _buildSectionLabel('Previsualización'),
-              Center(
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.amber, width: 2),
-                    borderRadius: BorderRadius.circular(50),
-                  ),
-                  padding: const EdgeInsets.all(4),
-                  child: ClipOval(
-                    child: Image.asset(
-                      _selectedIcon,
-                      width: 80,
-                      height: 80,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
               ),
               const SizedBox(height: 16),
-
-              // — Selector de estandarte en carrusel —
-              _buildSectionLabel('Elige tu estandarte'),
-              SizedBox(
-                height: 80,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _icons.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
-                  itemBuilder: (ctx, i) {
-                    final path     = _icons[i];
-                    final selected = path == _selectedIcon;
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedIcon = path),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: selected ? Colors.amber : Colors.transparent,
-                            width: 2,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.asset(path, width: 64, height: 64, fit: BoxFit.cover),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+              _label('Descripción', Icons.description),
+              const SizedBox(height: 8),
+              _textField(
+                controller: _descCtrl,
+                hint: 'Describe tu gremio…',
+                maxLength: 60,
+                maxLines: 4,
+                validator: (v) => (v?.trim().isEmpty ?? true) ? 'Requerido' : null,
               ),
-              const SizedBox(height: 32),
-
-              // — Botón Forjar con chequeo de FormState —
-              _isLoading
-                  ? Center(child: CircularProgressIndicator(color: Colors.amber))
-                  : ElevatedButton.icon(
-                      icon: const Icon(Icons.hail, color: Colors.black87),
-                      label: const Text('Forjar Gremio',
-                          style: TextStyle(color: Colors.black87, fontFamily: 'Cinzel')),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.amber,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              const SizedBox(height: 16),
+              _label('Estandarte', Icons.flag),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                 
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: _icons.map((p) {
+                          final sel = p == _selectedIcon;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: GestureDetector(
+                              onTap: () => setState(() => _selectedIcon = p),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                padding: sel ? const EdgeInsets.all(4) : EdgeInsets.zero,
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: sel ? Colors.amber : Colors.transparent,
+                                    width: 2,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Image.asset(
+                                    p,
+                                    width: 56,
+                                    height: 56,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
                       ),
-                      onPressed: () async {
-                        if (!_formKey.currentState!.validate()) return;
-                        setState(() => _isLoading = true);
-                        final newId = await guildVm.createGuild(
-                          name:        _nameCtrl.text.trim(),
-                          mayorId:     user.id,
-                          iconAsset:   _selectedIcon,
-                          description: _descCtrl.text.trim(),
-                          mayorElo:    user.eloRating,
-                        );
-                        setState(() => _isLoading = false);
-                        if (newId != null) {
-                          await authVm.setCityId(newId);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Gremio "${_nameCtrl.text}" creado 🎉')),
-                          );
-                          Navigator.pushNamedAndRemoveUntil(context, '/main', (_) => false);
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Error al crear gremio')),
-                          );
-                        }
-                      },
                     ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
       ),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar', style: TextStyle(color: Colors.white70, fontSize: 16)),
+        ),
+        ElevatedButton.icon(
+          icon: const Text('🔨', style: TextStyle(fontSize: 20)),
+          label: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(color: Colors.amber, strokeWidth: 2),
+                )
+              : const Text('Crear', style: TextStyle(color: Colors.black87, fontFamily: 'Cinzel', fontSize: 18)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.amber,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          ),
+          onPressed: _isLoading
+              ? null
+              : () async {
+                  if (!_formKey.currentState!.validate()) return;
+                  setState(() => _isLoading = true);
+                  final newId = await guildVm.createGuild(
+                    name: _nameCtrl.text.trim(),
+                    mayorId: user.id,
+                    iconAsset: _selectedIcon,
+                    description: _descCtrl.text.trim(),
+                    mayorElo: user.eloRating,
+                  );
+                  setState(() => _isLoading = false);
+                  if (newId != null) {
+                    await authVm.setCityId(newId);
+                    Navigator.pop(context);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Gremio "${_nameCtrl.text}" creado 🎉')),
+                      );
+                      Navigator.pushReplacementNamed(context, '/main');
+                    }
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Error al crear gremio')),
+                    );
+                  }
+                },
+        ),
+      ],
     );
   }
 
-  Widget _buildSectionLabel(String text) {
-    return Text(text,
-        style: TextStyle(
-            color: Colors.amber, fontFamily: 'Cinzel', fontSize: 16));
-  }
-}
+  Widget _label(String text, IconData icon) => Row(
+        children: [
+          Icon(icon, color: Colors.amber, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: const TextStyle(color: Colors.amber, fontFamily: 'Cinzel', fontSize: 16),
+          ),
+        ],
+      );
+
+  Widget _textField({
+    required TextEditingController controller,
+    required String hint,
+    int maxLength = 100,
+    int maxLines = 1,
+    String? Function(String?)? validator,
+  }) => TextFormField(
+        controller: controller,
+        style: const TextStyle(color: Colors.white, fontSize: 16),
+        maxLength: maxLength,
+        maxLines: maxLines,
+        decoration: InputDecoration(
+          counterStyle: const TextStyle(color: Colors.white54),
+          hintText: hint,
+          hintStyle: const TextStyle(color: Colors.white30),
+          filled: true,
+          fillColor: const Color(0xFF2A2A2A),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide.none,
+          ),
+        ),
+        validator: validator,
+      );
+ }
