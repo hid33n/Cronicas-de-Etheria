@@ -13,10 +13,11 @@ import 'package:guild/viewmodels/buildings/building_viewmodel.dart';
 class BuildingDialog extends StatefulWidget {
   final BuildingType building;
   final int level;
-
+  final String uid;   
   const BuildingDialog({
     required this.building,
     required this.level,
+    required this.uid
   });
 
   @override
@@ -127,33 +128,41 @@ class _BuildingDialogState extends State<BuildingDialog> {
       const SizedBox(height: 4),
       Text('Tiempo: ⏱️ $mins min', style: const TextStyle(color: Colors.white70)),
       const SizedBox(height: 16),
-      ElevatedButton.icon(
-        icon: const Icon(Icons.upgrade, color: Colors.black87),
-        label: Text('Mejorar a Lv $nextLevel', style: const TextStyle(color: Colors.black87)),
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-        onPressed: () async {
-          final error = await context.read<BuildingViewModel>().upgrade(uid, widget.building.id);
-          if (error != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    const Icon(Icons.warning_amber_rounded, color: Colors.white),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(error)),
-                  ],
-                ),
-                backgroundColor: Colors.red[600],
-                duration: const Duration(seconds: 3),
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+     ElevatedButton.icon(
+  icon: const Icon(Icons.upgrade, color: Colors.black87),
+  label: Text('Mejorar a Lv $nextLevel',
+      style: const TextStyle(color: Colors.black87)),
+  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+  onPressed: () {
+    // 1) Cierro el diálogo inmediatamente
+    Navigator.of(context).pop();
+    // 2) Lanzo la mejora en background
+    context.read<BuildingViewModel>()
+      .upgrade(widget.uid, widget.building.id)
+      .then((error) {
+        if (error != null) {
+          // 3) Si hubo fallo, muestro SnackBar
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(error)),
+                ],
               ),
-            );
-          } else {
-            Navigator.pop(context);
-          }
-        },
-      ),
+              backgroundColor: Colors.red[600],
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        }
+      });
+  },
+),
+
       if (widget.building.id == 'barracks') ...[
         const SizedBox(height: 12),
         ElevatedButton.icon(

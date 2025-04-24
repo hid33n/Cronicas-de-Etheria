@@ -70,76 +70,74 @@ class BuildingViewModel extends ChangeNotifier {
     };
   }
 
-  Future<String?> upgrade(String uid, String buildingId) async {
-    final userDoc = _userCol.doc(uid);
-    final bType = kBuildingCatalog[buildingId]!;
+ Future<String?> upgrade(String uid, String buildingId) async {
+  final userDocRef     = _userCol.doc(uid);
+  final bldDocRef      = userDocRef.collection('buildings').doc(buildingId);
+  final resColRef      = userDocRef.collection('resources');
+  final bType          = kBuildingCatalog[buildingId]!;
+  final currentLevel   = _levels[buildingId] ?? 1;
+  final nextLevel      = currentLevel + 1;
+  final timeSecs       = bType.baseCostTime * nextLevel;
+  final readyDateTime  = DateTime.now().add(Duration(seconds: timeSecs));
+  final readyTimestamp = Timestamp.fromDate(readyDateTime);
 
-    try {
-      await FirebaseFirestore.instance.runTransaction((tx) async {
-        final u = await tx.get(userDoc);
-        final lvl = (await tx.get(userDoc.collection('buildings').doc(buildingId)))
-                .data()?['level'] as int? ??
-            1;
-        final nextLvl = lvl + 1;
+  // 1) Optimistic UI: dibujo la cola inmediatamente
+  _queue[buildingId] = readyDateTime;
+  notifyListeners();
 
-        // Lógica de restricción por Ayuntamiento
-        if (nextLvl > 3 && buildingId != 'townhall') {
-          final townhallLvl = (await tx
-                  .get(userDoc.collection('buildings').doc('townhall')))
-              .data()?['level'] as int? ?? 1;
+  try {
+    await FirebaseFirestore.instance.runTransaction((tx) async {
+      // 2) Lectura de recursos
+      final woodSnap  = await tx.get(resColRef.doc('wood'));
+      final stoneSnap = await tx.get(resColRef.doc('stone'));
+      final foodSnap  = await tx.get(resColRef.doc('food'));
 
-          if (nextLvl > townhallLvl) {
-            throw Exception('Debes mejorar el Ayuntamiento para subir este edificio.');
-          }
-        }
+      final currWood  = (woodSnap.data()?['qty'] as int?) ?? 0;
+      final currStone = (stoneSnap.data()?['qty'] as int?) ?? 0;
+      final currFood  = (foodSnap.data()?['qty'] as int?) ?? 0;
 
-        // Costes escalados
-        final timeSecs = bType.baseCostTime * nextLvl;
-        final woodCost = bType.baseCostWood * nextLvl;
-        final stoneCost = bType.baseCostStone * nextLvl;
-        final foodCost = bType.baseCostFood * nextLvl;
+      // 3) Cálculo de costes
+      final woodCost   = bType.baseCostWood  * nextLevel;
+      final stoneCost  = bType.baseCostStone * nextLevel;
+      final foodCost   = bType.baseCostFood  * nextLevel;
 
-        final resCol = userDoc.collection('resources');
-        final woodDoc = await tx.get(resCol.doc('wood'));
-        final stoneDoc = await tx.get(resCol.doc('stone'));
-        final foodDoc = await tx.get(resCol.doc('food'));
+      if (currWood < woodCost || currStone < stoneCost || currFood < foodCost) {
+        throw Exception('No tienes recursos suficientes.');
+      }
 
-        final currWood = (woodDoc.data()?['qty'] as int?) ?? 0;
-        final currStone = (stoneDoc.data()?['qty'] as int?) ?? 0;
-        final currFood = (foodDoc.data()?['qty'] as int?) ?? 0;
+      // 4) Restar recursos
+      tx.update(resColRef.doc('wood'),  {'qty': currWood  - woodCost});
+      tx.update(resColRef.doc('stone'), {'qty': currStone - stoneCost});
+      tx.update(resColRef.doc('food'),  {'qty': currFood  - foodCost});
 
-        if (currWood < woodCost || currStone < stoneCost || currFood < foodCost) {
-          throw Exception('No tienes recursos suficientes.');
-        }
+      // 5) Programar la mejora en Firestore
+      tx.set(
+        bldDocRef,
+        {
+          // nivel provisional (mantiene el nivel actual hasta completar)
+          'level': currentLevel,
+          'readyAt': readyTimestamp,
+        },
+        SetOptions(merge: true),
+      );
 
-        // Restar recursos
-        tx.update(resCol.doc('wood'), {'qty': currWood - woodCost});
-        tx.update(resCol.doc('stone'), {'qty': currStone - stoneCost});
-        tx.update(resCol.doc('food'), {'qty': currFood - foodCost});
+      // 6) Guardar el objetivo en meta.upgrading
+      tx.update(
+        userDocRef,
+        { 'meta.upgrading.$buildingId': nextLevel },
+      );
+    });
 
-        // Programar mejora
-        tx.set(
-          userDoc.collection('buildings').doc(buildingId),
-          {
-            'level': lvl, // se mantiene hasta que se complete
-            'readyAt': Timestamp.fromMillisecondsSinceEpoch(
-              DateTime.now().millisecondsSinceEpoch + timeSecs * 1000,
-            ),
-          },
-        );
-
-        // Guardar meta del target level
-        tx.update(userDoc, {
-          'meta.upgrading.$buildingId': nextLvl,
-        });
-      });
-
-      notifyListeners();
-      return null;
-    } catch (e) {
-      return e.toString().replaceAll('Exception: ', '');
-    }
+    // 7) Finalmente, devolvemos éxito
+    return null;
+  } catch (e) {
+    // 8) Si falla la transacción, quito la cola optimista
+    _queue.remove(buildingId);
+    notifyListeners();
+    return e.toString().replaceAll('Exception: ', '');
   }
+}
+
 
   Future<void> completeUpgrades(String uid) async {
     final userDoc = FirebaseFirestore.instance.collection('users').doc(uid);
@@ -184,6 +182,46 @@ class BuildingViewModel extends ChangeNotifier {
     await batch.commit();
     notifyListeners();
   }
+/// Cancela la mejora pendiente de [buildingId] y devuelve el 50% de los recursos.
+Future<void> cancelUpgrade(String uid, String buildingId) async {
+  final userDoc = _userCol.doc(uid);
+  final bDoc    = userDoc.collection('buildings').doc(buildingId);
+  final bType   = kBuildingCatalog[buildingId]!;
+
+  // Leemos el meta para saber el nivel objetivo
+  final userSnap = await userDoc.get();
+  final meta = (userSnap.data()?['meta'] as Map<String, dynamic>?)?['upgrading']
+      as Map<String, dynamic>?;
+
+  final targetLvl = meta?[buildingId] as int?;
+  if (targetLvl == null) return; // no hay mejora pendiente
+
+  // Calculamos costes y refund al 50%
+  final woodCost  = bType.baseCostWood  * targetLvl;
+  final stoneCost = bType.baseCostStone * targetLvl;
+  final foodCost  = bType.baseCostFood  * targetLvl;
+
+  final refundWood  = (woodCost  * 0.5).floor();
+  final refundStone = (stoneCost * 0.5).floor();
+  final refundFood  = (foodCost  * 0.5).floor();
+
+  final resCol = userDoc.collection('resources');
+  final batch = FirebaseFirestore.instance.batch();
+
+  // Devolvemos recursos
+  batch.update(resCol.doc('wood'),  {'qty': FieldValue.increment(refundWood)});
+  batch.update(resCol.doc('stone'), {'qty': FieldValue.increment(refundStone)});
+  batch.update(resCol.doc('food'),  {'qty': FieldValue.increment(refundFood)});
+
+  // Limpiamos la cola de mejora
+  batch.update(bDoc, {'readyAt': null});              // quita timestamp
+  batch.update(userDoc, {
+    'meta.upgrading.$buildingId': FieldValue.delete(), // quita meta
+  });
+
+  await batch.commit();
+  notifyListeners();
+}
 
   Future<void> collectResources(String uid) async {
     final userDocRef = _userCol.doc(uid);
