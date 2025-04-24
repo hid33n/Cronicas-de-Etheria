@@ -19,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late final String _uid;
   Timer? _upgradeTimer;
+  Timer? _uiTimer;      // <-- nuevo
 
   @override
   void initState() {
@@ -32,12 +33,18 @@ class _HomeScreenState extends State<HomeScreen> {
       _upgradeTimer = Timer.periodic(const Duration(seconds: 30), (_) {
         bldVm.completeUpgrades(_uid);
       });
+            // 2) nuevo: cada segundo redibujo para actualizar el countdown
+      _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    
     });
   }
 
   @override
   void dispose() {
     _upgradeTimer?.cancel();
+     _uiTimer?.cancel();
     super.dispose();
   }
 
@@ -48,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final user   = authVm.user!;
     final prod   = bldVm.productionPerHour;
     final topPad = MediaQuery.of(context).padding.top + 8;
+
 
     // Calculo actual de mejoras en curso
     final upgrades = bldVm.upgradeTimeLeft;
@@ -71,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: GestureDetector(
               onTap: () => showDialog(
                 context: context,
-                builder: (_) => BuildingDialog(building: b, level: lvl),
+                builder: (_) => BuildingDialog(building: b, level: lvl,     uid: _uid,  ),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -139,42 +147,139 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // ─── INDICADOR DE MEJORAS ────────────────────
-        if (upgrades.isNotEmpty)
-          Positioned(
-            top: topPad + 48,
-            left: 16,
-            right: 16,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: upgrades.entries.map((e) {
-                    final b = kBuildingCatalog[e.key]!;
-                    final rem = e.value;
-                    final mm = rem.inMinutes.remainder(60).toString().padLeft(2, '0');
-                    final ss = rem.inSeconds.remainder(60).toString().padLeft(2, '0');
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 16),
-                      child: Text(
-                        '🔧 ${b.name}: $mm:$ss',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
+      // ─── INDICADOR DE MEJORAS (miniaturas con contenedor) ───────────────────
+
+if (upgrades.isNotEmpty)
+  Positioned(
+    top: topPad + 80,
+    right: 2,
+    child: Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(84, 0, 0, 0),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Título de la cola
+          const Text(
+            'Cola',
+            style: TextStyle(
+
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
             ),
           ),
+          const SizedBox(height: 6),
+
+          // Lista de mejoras en curso
+          ...upgrades.entries.map((e) {
+            final b = kBuildingCatalog[e.key]!;
+            final rem = e.value;
+            final mm = rem.inMinutes.remainder(60).toString().padLeft(2, '0');
+            final ss = rem.inSeconds.remainder(60).toString().padLeft(2, '0');
+return Padding(
+  padding: const EdgeInsets.only(bottom: 4),
+  child: Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Image.asset(
+        b.assetPath,
+        width: 24,
+        height: 24,
+        fit: BoxFit.contain,
+      ),
+      const SizedBox(width: 4),
+      Text(
+        '$mm:$ss',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontFeatures: [FontFeature.tabularFigures()],
+        ),
+      ),
+      // ── Aquí la X roja ──
+      const SizedBox(width: 6),
+     // dentro de upgrades.entries.map((e) { … })
+GestureDetector(
+  onTap: () {
+    final vm = context.read<BuildingViewModel>();
+    // 1) calculamos niveles y costes
+    final currentLvl = vm.levels[e.key] ?? 1;
+    final nextLvl    = currentLvl + 1;
+    final bType      = kBuildingCatalog[e.key]!;
+
+    final woodCost   = bType.baseCostWood  * nextLvl;
+    final stoneCost  = bType.baseCostStone * nextLvl;
+    final foodCost   = bType.baseCostFood  * nextLvl;
+
+    final woodRefund  = (woodCost  * 0.5).floor();
+    final stoneRefund = (stoneCost * 0.5).floor();
+    final foodRefund  = (foodCost  * 0.5).floor();
+
+    // 2) mostramos diálogo con emojis y cantidades
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        title: const Text(
+          '🛡️ Cancelar mejora',
+          style: TextStyle(color: Colors.amber),
+        ),
+        content: Text(
+          'Solo recuperarás el 50 % de los recursos gastados:\n'
+          '🪵 $woodRefund   🪨 $stoneRefund   🌾 $foodRefund\n\n'
+          '¿Estás seguro?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('❌ No', style: TextStyle(color: Colors.white)),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          TextButton(
+            child: const Text('✅ Sí', style: TextStyle(color: Colors.white)),
+            onPressed: () {
+              // 3) si confirman, cancelamos la mejora y cerramos todo
+              vm.cancelUpgrade(_uid, e.key);
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ],
+      ),
+    );
+  },
+  child: Container(
+    width: 18,
+    height: 18,
+    decoration: const BoxDecoration(
+      color: Colors.redAccent,
+      shape: BoxShape.circle,
+    ),
+    child: const Icon(
+      Icons.close,
+      size: 14,
+      color: Colors.white,
+    ),
+  ),
+),
+
+    ],
+  ),
+);
+          }
+          ).toList(),
+        ],
+      ),
+    ),
+  ),
+
 
         // ─── CHAT GLOBAL ────────────────────────
         const GlobalChatWidget(),
