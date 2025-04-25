@@ -80,5 +80,5 @@
 
 ---
 
-© 2025 Crónicas de Etheria. Creado con ❤️ por la comunidad Guild.
+© 2025 Crónicas de Etheria. Creado con ❤️
 
