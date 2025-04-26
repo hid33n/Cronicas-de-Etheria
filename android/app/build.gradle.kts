@@ -61,7 +61,6 @@ android {
              if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             } else {
-                // Si no, dejamos que sea debug-keystore (útil para pruebas internas)
                 signingConfig = signingConfigs.getByName("debug")
             }
         }
