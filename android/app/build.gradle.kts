@@ -39,18 +39,18 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            // Estos campos vienen de key.properties
-            keyAlias   = keystoreProperties["keyAlias"]   as String?
-            keyPassword= keystoreProperties["keyPassword"] as String?
-            storeFile  = file(keystoreProperties["storeFile"] as String?)
-            storePassword = keystoreProperties["storePassword"] as String?
+       if (keystorePropertiesFile.exists()) {
+            create("release") {
+                keyAlias      = keystoreProperties["keyAlias"]   as String
+                keyPassword   = keystoreProperties["keyPassword"] as String
+                storeFile     = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
         }
     }
 
     buildTypes {
         getByName("debug") {
-            signingConfig = signingConfigs.getByName("debug")
         }
         getByName("release") {
             isMinifyEnabled = true      // activa R8/ProGuard
@@ -58,7 +58,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+             if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                // Si no, dejamos que sea debug-keystore (útil para pruebas internas)
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 }
