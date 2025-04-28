@@ -156,7 +156,19 @@ class BattleViewModel extends ChangeNotifier {
     if (data == null) return {};
     return data.map((k, v) => MapEntry(k, v as int));
   }
-
+/// Obtiene el ejército disponible del usuario desde Firestore
+Future<Map<String,int>> fetchAvailableUnits(String uid) async {
+  final doc = await _fs.collection('users').doc(uid).get();
+  final data = doc.data()?['army'] as Map<String,dynamic>? ?? {};
+  final avail = <String,int>{};
+  data.forEach((unitId, qty) {
+    final amount = qty as int;
+    if (amount > 0 && kUnitCatalog.containsKey(unitId)) {
+      avail[unitId] = amount;
+    }
+  });
+  return avail;
+}
   /// Simula el combate y devuelve resultado
   _SimResult _simulateBattle({
     required String attackerId,
