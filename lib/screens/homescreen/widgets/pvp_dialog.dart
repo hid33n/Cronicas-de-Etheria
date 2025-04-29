@@ -121,7 +121,7 @@ class _PvpDialogState extends State<PvpDialog> {
     }).catchError((e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('Error en PvP: \$e'),
+          content: Text('Error en PvP: $e'),
           backgroundColor: Colors.red[700],
           behavior: SnackBarBehavior.floating,
         ),

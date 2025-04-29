@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:guild/data/race_catalog.dart';
 import 'package:guild/data/unit_catalog.dart';
+import 'package:guild/models/battle_report_model.dart';
 import 'package:guild/viewmodels/auth/auth_viewmodel.dart';
 import 'package:provider/provider.dart';
 
@@ -14,7 +15,7 @@ class PvpInfoScreen extends StatelessWidget {
     final reportsStream = FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
-        .collection('pvp_reports')
+        .collection('battleReports')
         .orderBy('timestamp', descending: true)
         .snapshots();
     final rankingStream = FirebaseFirestore.instance
@@ -62,167 +63,244 @@ class PvpInfoScreen extends StatelessWidget {
               Expanded(
                 child: TabBarView(
                   children: [
-                    // ─── Tab 1: Informes ───────────────────────────────
-                    StreamBuilder<QuerySnapshot>(
-                      stream: reportsStream,
-                      builder: (context, snap) {
-                        if (snap.hasError) {
-                          return Center(
-                            child: Text(
-                              'Error: ${snap.error}',
-                              style: TextStyle(color: Colors.redAccent),
-                            ),
-                          );
-                        }
-                        if (snap.connectionState != ConnectionState.active) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        final docs = snap.data?.docs ?? [];
-                        if (docs.isEmpty) {
-                          return const Center(
-                            child: Text(
-                              'Sin informes de batalla',
-                              style: TextStyle(color: Colors.white70),
-                            ),
-                          );
-                        }
-                        return ListView.builder(
-                          padding: const EdgeInsets.all(12),
-                          itemCount: docs.length,
-                          itemBuilder: (context, i) {
-                            final doc  = docs[i];
-                            final data = doc.data() as Map<String, dynamic>;
-                            final oppId  = data['opponentId']        as String;
-                            final won    = data['attackerWon']       as bool;
-                            final elo    = data['eloDelta']          as int;
-                            final survA  = Map<String, int>.from(data['survivorsAttacker'] ?? {});
-                            final lossA  = Map<String, int>.from(data['lossesAttacker']   ?? {});
-                            final survD  = Map<String, int>.from(data['survivorsDefender'] ?? {});
-                            final lossD  = Map<String, int>.from(data['lossesDefender']     ?? {});
+                // Dentro de tu PvpInfoScreen, reemplaza solo la parte del Tab 1 por esto:
 
-                            return Card(
-                              color: Colors.grey[850],
-                              elevation: 4,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              margin: const EdgeInsets.symmetric(vertical: 8),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: FutureBuilder<DocumentSnapshot>(
-                                  future: FirebaseFirestore.instance
-                                      .collection('users')
-                                      .doc(oppId)
-                                      .get(),
-                                  builder: (context, uSnap) {
-                                    final oppName = (uSnap.hasData && uSnap.data!.data() != null)
-                                        ? (uSnap.data!.data()! as Map<String, dynamic>)['name'] as String? ?? oppId
-                                        : oppId;
-                                    return Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Text(
-                                              won ? '🏆 Victoria' : '💀 Derrota',
-                                              style: TextStyle(
-                                                color: won ? Colors.greenAccent : Colors.redAccent,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Text(
-                                                'Vs. $oppName',
-                                                style: const TextStyle(color: Colors.amber),
-                                              ),
-                                            ),
-                                            Text(
-                                              'Elo: ${elo >= 0 ? '+' : ''}$elo',
-                                              style: TextStyle(
-                                                color: elo >= 0 ? Colors.greenAccent : Colors.redAccent,
-                                              ),
-                                            ),
-                                           IconButton(
-  icon: const Icon(Icons.delete, color: Colors.white70),
-  onPressed: () async {
-    // 1) capturamos el messenger _antes_ de await
-    final messenger = ScaffoldMessenger.of(context);
-
-    try {
-      await FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('pvp_reports')
-        .doc(doc.id)
-        .delete();
-
-      // 2) aquí ya no volvemos a usar `context`
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Informe eliminado'),
-          backgroundColor: Colors.blueGrey,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Error al eliminar: $e'),
-          backgroundColor: Colors.red[700],
-          behavior: SnackBarBehavior.floating,
-        ),
+StreamBuilder<QuerySnapshot>(
+  stream: reportsStream,
+  builder: (context, snap) {
+    if (snap.hasError) {
+      return Center(
+        child: Text('Error: ${snap.error}', style: TextStyle(color: Colors.redAccent)),
       );
     }
+    if (snap.connectionState != ConnectionState.active) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final docs = snap.data!.docs;
+    if (docs.isEmpty) {
+      return const Center(
+        child: Text('Sin informes de batalla', style: TextStyle(color: Colors.white70)),
+      );
+    }
+return ListView.builder(
+  padding: const EdgeInsets.all(12),
+  itemCount: docs.length,
+  itemBuilder: (context, i) {
+    final report = BattleReport.fromDoc(docs[i]);
+    final survA = report.survivorsAttacker;
+    final lossA = report.lossesAttacker;
+    final survD = report.survivorsDefender;
+    final lossD = report.lossesDefender;
+
+    return Card(
+  color: Colors.grey[850],
+  elevation: 4,
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(12),
+  ),
+  margin: const EdgeInsets.symmetric(vertical: 8),
+  child: Padding(
+    padding: const EdgeInsets.all(12),
+    child: FutureBuilder<List<DocumentSnapshot>>(
+      future: Future.wait([
+        FirebaseFirestore.instance.collection('users').doc(report.attackerId).get(),
+        FirebaseFirestore.instance.collection('users').doc(report.defenderId).get(),
+      ]),
+      builder: (context, nameSnap) {
+        if (!nameSnap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final atkDoc = nameSnap.data![0];
+        final defDoc = nameSnap.data![1];
+        final atkName = (atkDoc.data() as Map<String, dynamic>)['name'] as String? ?? report.attackerId;
+        final defName = (defDoc.data() as Map<String, dynamic>)['name'] as String? ?? report.defenderId;
+        final survA = report.survivorsAttacker;
+        final lossA = report.lossesAttacker;
+        final survD = report.survivorsDefender;
+        final lossD = report.lossesDefender;
+        final uid = context.read<AuthViewModel>().user!.id;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Encabezado con nombres, ELO y botón de eliminar
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Atacante
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Atacante: $atkName',
+                              style: const TextStyle(
+                                color: Colors.amber,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            'Elo: ${report.eloDeltaAttacker >= 0 ? '+' : ''}${report.eloDeltaAttacker}',
+                            style: TextStyle(
+                              color: report.eloDeltaAttacker >= 0
+                                  ? Colors.greenAccent
+                                  : Colors.redAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      // Defensor
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Defensor: $defName',
+                              style: const TextStyle(
+                                color: Colors.amber,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            'Elo: ${report.eloDeltaDefender >= 0 ? '+' : ''}${report.eloDeltaDefender}',
+                            style: TextStyle(
+                              color: report.eloDeltaDefender >= 0
+                                  ? Colors.greenAccent
+                                  : Colors.redAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Botón de eliminar
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                  child: IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.white70),
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      try {
+                        await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(uid)
+                            .collection('battleReports')
+                            .doc(report.id)
+                            .delete();
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('Informe eliminado'),
+                            backgroundColor: Colors.blueGrey,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      } catch (e) {
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text('Error al eliminar: $e'),
+                            backgroundColor: Colors.red[700],
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+
+            const Divider(color: Colors.white24),
+
+            // Tropas de Ataque
+            const Text(
+              '⚔️ Tropas de Ataque',
+              style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: survA.entries
+                  .where((e) => kUnitCatalog.containsKey(e.key))
+                  .map((e) {
+                    final unit = kUnitCatalog[e.key]!;
+                    return Text(
+                      '🛡️${unit.emoji}${e.value}',
+                      style: const TextStyle(color: Colors.white70),
+                    );
+                  })
+                  .toList(),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: lossA.entries
+                  .where((e) => kUnitCatalog.containsKey(e.key))
+                  .map((e) {
+                    final unit = kUnitCatalog[e.key]!;
+                    return Text(
+                      '💥${unit.emoji}${e.value}',
+                      style: const TextStyle(color: Colors.white70),
+                    );
+                  })
+                  .toList(),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Tropas de Defensa
+            const Text(
+              '🛡️ Tropas de Defensa',
+              style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: survD.entries
+                  .where((e) => kUnitCatalog.containsKey(e.key))
+                  .map((e) {
+                    final unit = kUnitCatalog[e.key]!;
+                    return Text(
+                      '🛡️${unit.emoji}${e.value}',
+                      style: const TextStyle(color: Colors.white70),
+                    );
+                  })
+                  .toList(),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: lossD.entries
+                  .where((e) => kUnitCatalog.containsKey(e.key))
+                  .map((e) {
+                    final unit = kUnitCatalog[e.key]!;
+                    return Text(
+                      '💥${unit.emoji}${e.value}',
+                      style: const TextStyle(color: Colors.white70),
+                    );
+                  })
+                  .toList(),
+            ),
+          ],
+        );
+      },
+    ),
+  ),
+);
+
+  },
+);
   },
 ),
-
-                                          ],
-                                        ),
-                                        const Divider(color: Colors.white24),
-                                        Wrap(
-                                          spacing: 6,
-                                          runSpacing: 4,
-                                          children: [
-                                            for (var e in survA.entries)
-                                              Text(
-                                                '🛡️${kUnitCatalog[e.key]!.emoji}${e.value}',
-                                                style: const TextStyle(color: Colors.white70),
-                                              ),
-                                            for (var e in lossA.entries)
-                                              Text(
-                                                '💥${kUnitCatalog[e.key]!.emoji}${e.value}',
-                                                style: const TextStyle(color: Colors.white70),
-                                              ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Wrap(
-                                          spacing: 6,
-                                          runSpacing: 4,
-                                          children: [
-                                            for (var e in survD.entries)
-                                              Text(
-                                                '🛡️${kUnitCatalog[e.key]!.emoji}${e.value}',
-                                                style: const TextStyle(color: Colors.white70),
-                                              ),
-                                            for (var e in lossD.entries)
-                                              Text(
-                                                '💥${kUnitCatalog[e.key]!.emoji}${e.value}',
-                                                style: const TextStyle(color: Colors.white70),
-                                              ),
-                                          ],
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
 
                     // ─── Tab 2: Ranking ────────────────────────────────
                     StreamBuilder<QuerySnapshot>(
