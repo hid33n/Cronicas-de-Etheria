@@ -73,13 +73,16 @@ class _BarracksScreenState extends State<BarracksScreen>
   }
 
   Widget _buildArmyTab() {
- final entries = _vm.army.entries
-    .where((e) {
-      final u  = kUnitCatalog[e.key]!;
-      final rr = u.requiredRace;
-      return (rr == null || rr.isEmpty || rr == _race) && e.value > 0;
-    })
-    .toList();  // <-- convierte el Iterable en List
+final entries = _vm.army.entries
+  .where((e) {
+    final unit = kUnitCatalog[e.key];
+    if (unit == null) return false;           // descartas claves inválidas
+    final rr = unit.requiredRace;
+    return (rr == null || rr.isEmpty || rr == _race)
+        && e.value > 0;
+  })
+  .toList();
+
 
     return GridView.builder(
       padding: const EdgeInsets.all(16),
