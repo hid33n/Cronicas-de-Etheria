@@ -58,7 +58,10 @@ class BuildingViewModel extends ChangeNotifier {
       notifyListeners();
     });
   }
-
+  void increaseMaxUpgrades(int extra) {
+    maxConcurrentUpgrades += extra;
+    notifyListeners();
+  }
   /// Producción por hora de cada edificio según su nivel
   Map<String, int> get productionPerHour {
     final rates = <String, int>{};
