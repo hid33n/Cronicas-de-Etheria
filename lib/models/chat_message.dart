@@ -15,21 +15,19 @@ class ChatMessage {
     required this.timestamp,
   });
 
-  factory ChatMessage.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data()!;
-    return ChatMessage(
-      id: doc.id,
-      senderId: data['senderId'] as String,
-      senderName: data['senderName'] as String,
-      text: data['text'] as String,
-      timestamp: (data['timestamp'] as Timestamp).toDate(),
-    );
-  }
+  factory ChatMessage.fromDoc(Map<String, dynamic> json) => ChatMessage(
+    id: json['id'] as String,
+    senderId: json['senderId'] as String,
+    senderName: json['senderName'] as String,
+    text: json['text'] as String,
+    timestamp: (json['timestamp'] as Timestamp).toDate(),
+  );
 
-  Map<String, dynamic> toMap() => {
-        'senderId': senderId,
-        'senderName': senderName,
-        'text': text,
-        'timestamp': FieldValue.serverTimestamp(),
-      };
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'senderId': senderId,
+    'senderName': senderName,
+    'text': text,
+    'timestamp': FieldValue.serverTimestamp(),
+  };
 }

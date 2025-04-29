@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:guild/models/chat_message.dart';
+import 'package:guild/services/globa_chat_services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../viewmodels/chat_viewmodel.dart';
@@ -18,26 +20,9 @@ class _GlobalChatWidgetState extends State<GlobalChatWidget> {
   bool _hovering = false;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      try {
-        context.read<ChatViewModel>().initGlobalChat();
-      } catch (e, s) {
-        debugPrint('Error al iniciar chat: $e');
-        debugPrintStack(stackTrace: s);
-      }
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final chatVm = context.watch<ChatViewModel>();
     final user = context.read<AuthViewModel>().user!;
-
-    final messages = chatVm.globalMessages.length > 20
-        ? chatVm.globalMessages.sublist(chatVm.globalMessages.length - 20)
-        : chatVm.globalMessages;
 
     return Positioned(
       bottom: 60,
@@ -65,72 +50,115 @@ class _GlobalChatWidgetState extends State<GlobalChatWidget> {
                     child: SingleChildScrollView(
                       controller: _scrollController,
                       reverse: true,
-                      child: Column(
-                        children: messages.map((msg) {
-                          final isMe = msg.senderId == user.id;
-                          final time = DateFormat('HH:mm').format(msg.timestamp);
-                          return Align(
-                            alignment:
-                                isMe ? Alignment.centerRight : Alignment.centerLeft,
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 2),
-                              child: Column(
-                                crossAxisAlignment: isMe
-                                    ? CrossAxisAlignment.end
-                                    : CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      if (!isMe)
-                                        Padding(
-                                          padding: const EdgeInsets.only(right: 4),
-                                          child: Text(
-                                            time,
-                                            style: TextStyle(
-                                              color: Colors.grey[400],
-                                              fontSize: 10,
-                                            ),
-                                          ),
+                      child: StreamBuilder<List<ChatMessage>>(
+                        stream: GlobaChatServices().getGlobalMessages(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            final messages = snapshot.data;
+                            if (messages == null) {
+                              return SizedBox();
+                            }
+                            return Column(
+                              children:
+                                  messages.map((msg) {
+                                    final isMe = msg.senderId == user.id;
+                                    final time = DateFormat(
+                                      'HH:mm',
+                                    ).format(msg.timestamp);
+                                    return Align(
+                                      alignment:
+                                          isMe
+                                              ? Alignment.centerRight
+                                              : Alignment.centerLeft,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 2,
                                         ),
-                                      Flexible(
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: isMe
-                                                ? Colors.amber[700]
-                                                : Colors.white10,
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            '${msg.senderName}: ${msg.text}',
-                                            style: TextStyle(
-                                              color: isMe ? Colors.black : Colors.white,
-                                              fontSize: 12,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              isMe
+                                                  ? CrossAxisAlignment.end
+                                                  : CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.end,
+                                              children: [
+                                                if (!isMe)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          right: 4,
+                                                        ),
+                                                    child: Text(
+                                                      time,
+                                                      style: TextStyle(
+                                                        color: Colors.grey[400],
+                                                        fontSize: 10,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                Flexible(
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 10,
+                                                          vertical: 4,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          isMe
+                                                              ? Colors
+                                                                  .amber[700]
+                                                              : Colors.white10,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            6,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      '${msg.senderName}: ${msg.text}',
+                                                      style: TextStyle(
+                                                        color:
+                                                            isMe
+                                                                ? Colors.black
+                                                                : Colors.white,
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (isMe)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          left: 4,
+                                                        ),
+                                                    child: Text(
+                                                      time,
+                                                      style: TextStyle(
+                                                        color: Colors.grey[400],
+                                                        fontSize: 10,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
                                             ),
-                                          ),
+                                          ],
                                         ),
                                       ),
-                                      if (isMe)
-                                        Padding(
-                                          padding: const EdgeInsets.only(left: 4),
-                                          child: Text(
-                                            time,
-                                            style: TextStyle(
-                                              color: Colors.grey[400],
-                                              fontSize: 10,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ],
+                                    );
+                                  }).toList(),
+                            );
+                          } else {
+                            return Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
                               ),
-                            ),
-                          );
-                        }).toList(),
+                            );
+                          }
+                        },
                       ),
                     ),
                   ),
@@ -149,14 +177,16 @@ class _GlobalChatWidgetState extends State<GlobalChatWidget> {
                               filled: true,
                               fillColor: Colors.grey[800],
                               contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
                                 borderSide: BorderSide.none,
                               ),
                             ),
-                            onSubmitted: (_) =>
-                                _send(chatVm, user.id, user.name),
+                            onSubmitted:
+                                (_) => _send(chatVm, user.id, user.name),
                           ),
                         ),
                         IconButton(
@@ -164,8 +194,8 @@ class _GlobalChatWidgetState extends State<GlobalChatWidget> {
                           onPressed: () => _send(chatVm, user.id, user.name),
                         ),
                       ],
-                    )
-                  ]
+                    ),
+                  ],
                 ],
               ),
             ),
