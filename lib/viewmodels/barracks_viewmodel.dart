@@ -23,10 +23,13 @@ class BarracksViewModel extends ChangeNotifier {
 
   // Local state
   final List<_QueueItem> _queue = [];
-  final Map<String, int> _army   = {};
+  final Map<String, int> _army = {};
+
+  /// Máximo de entrenamientos concurrentes
+  int maxConcurrentTraining = 1;
 
   List<_QueueItem> get queue => List.unmodifiable(_queue);
-  Map<String, int> get army      => _army;
+  Map<String, int> get army => _army;
 
   /// Initialize listeners for this user
   void initForUser(String uid) {
@@ -37,56 +40,56 @@ class BarracksViewModel extends ChangeNotifier {
   // Listen to pending training queue
   void _listenQueue(String uid) {
     _db
-      .collection('users').doc(uid)
-      .collection('barracksQueue')
-      .snapshots()
-      .listen((snap) {
-        _queue
-          ..clear()
-          ..addAll(snap.docs.map((d) {
-            final data = d.data() as Map<String, dynamic>?;
-            return _QueueItem(
-              docId:   d.id,
-              unitId:  data?['unitId'] as String,
-              qty:     data?['qty']    as int?    ?? 0,
-              readyAt: (data?['readyAt'] as Timestamp).toDate(),
-            );
-          }));
-        notifyListeners();
-      });
+        .collection('users').doc(uid)
+        .collection('barracksQueue')
+        .snapshots()
+        .listen((snap) {
+      _queue
+        ..clear()
+        ..addAll(snap.docs.map((d) {
+          final data = d.data() as Map<String, dynamic>?;
+          return _QueueItem(
+            docId: d.id,
+            unitId: data?['unitId'] as String,
+            qty: data?['qty'] as int? ?? 0,
+            readyAt: (data?['readyAt'] as Timestamp).toDate(),
+          );
+        }));
+      notifyListeners();
+    });
   }
 
   // Listen to user's army field
   void _listenArmy(String uid) {
     _db
-      .collection('users').doc(uid)
-      .snapshots()
-      .listen((snap) {
-        final data = snap.data();
-        _army
-          ..clear()
-          ..addAll(
-            (data?['army'] as Map<String, dynamic>? ?? {})
+        .collection('users').doc(uid)
+        .snapshots()
+        .listen((snap) {
+      final data = snap.data();
+      _army
+        ..clear()
+        ..addAll(
+          (data?['army'] as Map<String, dynamic>? ?? {})
               .map((unitId, qty) => MapEntry(unitId, qty as int)),
-          );
-        notifyListeners();
-      });
+        );
+      notifyListeners();
+    });
   }
 
   /// Cancel a specific training (refunds resources)
   Future<void> cancelTraining(String uid, String docId) async {
     final ref = _db
-      .collection('users').doc(uid)
-      .collection('barracksQueue')
-      .doc(docId);
+        .collection('users').doc(uid)
+        .collection('barracksQueue')
+        .doc(docId);
     final snap = await ref.get();
     final data = snap.data() as Map<String, dynamic>?;
     if (data == null) return;
 
     final unitId = data['unitId'] as String;
-    final qty    = data['qty']    as int? ?? 0;
-    final unit   = kUnitCatalog[unitId]!;
-    final cost   = unit.costScaled(qty);
+    final qty = data['qty'] as int? ?? 0;
+    final unit = kUnitCatalog[unitId]!;
+    final cost = unit.costScaled(qty);
 
     await _db.runTransaction((tx) async {
       final resCol = _db.collection('users').doc(uid).collection('resources');
@@ -104,10 +107,22 @@ class BarracksViewModel extends ChangeNotifier {
       tx.update(fRef, {'qty': fCurr + cost.food});
       tx.delete(ref);
     });
+
+    // Actualizar cola local inmediatamente
+    _queue.removeWhere((item) => item.docId == docId);
+    notifyListeners();
   }
 
   /// Enqueue training, deducting resources
   Future<void> trainUnit(String uid, String unitId, int qty) async {
+    // 1) Verificar límite concurrente
+    if (_queue.length >= maxConcurrentTraining) {
+      throw Exception(
+        'Límite de entrenamientos alcanzado ' 
+        '(${_queue.length}/$maxConcurrentTraining).'
+      );
+    }
+
     final unit = kUnitCatalog[unitId]!;
     final cost = unit.costScaled(qty);
     final resCol = _db.collection('users').doc(uid).collection('resources');
@@ -117,41 +132,58 @@ class BarracksViewModel extends ChangeNotifier {
       throw Exception('Recursos insuficientes');
     }
 
-    final readyAt = DateTime.now().add(Duration(seconds: unit.baseTrainSecs * qty));
+    final readyAt = DateTime.now().add(
+      Duration(seconds: unit.baseTrainSecs * qty)
+    );
 
-    await _db.runTransaction((tx) async {
-      _deductResources(tx, resCol, resources, cost);
-      final queueRef = _db
+    // 2) Transacción: deducir y crear doc en Firestore
+    final queueRef = _db
         .collection('users').doc(uid)
         .collection('barracksQueue')
         .doc();
+
+    await _db.runTransaction((tx) async {
+      _deductResources(tx, resCol, resources, cost);
       tx.set(queueRef, {
         'unitId': unitId,
         'qty': qty,
         'readyAt': readyAt,
       });
     });
+
+    // 3) Actualizar cola local inmediatamente
+    _queue.add(_QueueItem(
+      docId: queueRef.id,
+      unitId: unitId,
+      qty: qty,
+      readyAt: readyAt,
+    ));
+    notifyListeners();
+  }
+
+  /// Para cuando el usuario compre un slot extra
+  void increaseMaxTraining(int extra) {
+    maxConcurrentTraining += extra;
+    notifyListeners();
   }
 
   /// Complete trainings and add to user's army field
   Future<void> completeTrainings(String uid) async {
     final now = DateTime.now();
     final readyDocs = await _db
-      .collection('users').doc(uid)
-      .collection('barracksQueue')
-      .where('readyAt', isLessThanOrEqualTo: now)
-      .get();
+        .collection('users').doc(uid)
+        .collection('barracksQueue')
+        .where('readyAt', isLessThanOrEqualTo: now)
+        .get();
 
     final batch = _db.batch();
 
     for (var doc in readyDocs.docs) {
       final data = doc.data();
       final unitId = data['unitId'] as String;
-      final qty    = data['qty']    as int? ?? 0;
+      final qty = data['qty'] as int? ?? 0;
       final userRef = _db.collection('users').doc(uid);
-      // Increment army.{unitId}
       batch.update(userRef, {'army.$unitId': FieldValue.increment(qty)});
-      // Remove from queue
       batch.delete(doc.reference);
     }
 
@@ -159,12 +191,10 @@ class BarracksViewModel extends ChangeNotifier {
   }
 
   /// Read current resources
-    /// Read current resources
   Future<_Resources> _getCurrentResources(CollectionReference col) async {
     final wSnap = await col.doc('wood').get();
     final sSnap = await col.doc('stone').get();
     final fSnap = await col.doc('food').get();
-    // Firestore returns data as Object?, so cast to Map before indexing
     final wData = wSnap.data() as Map<String, dynamic>?;
     final sData = sSnap.data() as Map<String, dynamic>?;
     final fData = fSnap.data() as Map<String, dynamic>?;
@@ -176,9 +206,9 @@ class BarracksViewModel extends ChangeNotifier {
 
   void _deductResources(Transaction tx, CollectionReference col,
       _Resources cur, _Resources cost) {
-    tx.update(col.doc('wood'), {'qty': cur.wood  - cost.wood});
-    tx.update(col.doc('stone'),{'qty': cur.stone - cost.stone});
-    tx.update(col.doc('food'), {'qty': cur.food  - cost.food});
+    tx.update(col.doc('wood'), {'qty': cur.wood - cost.wood});
+    tx.update(col.doc('stone'), {'qty': cur.stone - cost.stone});
+    tx.update(col.doc('food'), {'qty': cur.food - cost.food});
   }
 }
 
@@ -192,8 +222,8 @@ class _Resources {
 
 extension on UnitType {
   _Resources costScaled(int qty) => _Resources(
-    wood: costWood   * qty,
+    wood: costWood * qty,
     stone: costStone * qty,
-    food: costFood   * qty,
+    food: costFood * qty,
   );
 }
