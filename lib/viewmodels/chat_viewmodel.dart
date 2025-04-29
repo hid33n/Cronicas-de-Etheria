@@ -9,44 +9,44 @@ class ChatViewModel extends ChangeNotifier {
   List<QueryDocumentSnapshot> _messages = [];
   List<ChatMessage> globalMessages = [];
   List<ChatMessage> cityMessages = [];
-int get unreadGlobalCount => _messages.where((m) => !(m.data() as Map)['read'] as bool).length;
+  int get unreadGlobalCount =>
+      _messages.where((m) => !(m.data() as Map)['read'] as bool).length;
   StreamSubscription? _globalSub;
   StreamSubscription? _citySub;
 
-  void initGlobalChat() {
-  _globalSub?.cancel();
-  _globalSub = _firestore
-      .collection('chats')
-      .doc('global')
-      .collection('messages')
-      .orderBy('timestamp', descending: false)
-      .snapshots()
-      .listen((snap) {
-    try {
-      globalMessages = snap.docs.map(ChatMessage.fromDoc).toList();
-      notifyListeners();
-    } catch (e, s) {
-      debugPrint('Error al procesar mensajes: $e');
-      debugPrintStack(stackTrace: s);
-    }
-  });
-}
+  //   void initGlobalChat() {
+  //   _globalSub?.cancel();
+  //   _globalSub = _firestore
+  //       .collection('chats')
+  //       .doc('global')
+  //       .collection('messages')
+  //       .orderBy('timestamp', descending: false)
+  //       .snapshots()
+  //       .listen((snap) {
+  //     try {
+  //       globalMessages = snap.docs.map(ChatMessage.fromDoc).toList();
+  //       notifyListeners();
+  //     } catch (e, s) {
+  //       debugPrint('Error al procesar mensajes: $e');
+  //       debugPrintStack(stackTrace: s);
+  //     }
+  //   });
+  // }
 
-
-  /// Inicia el listener para el chat de una ciudad (gremio)
-  void initCityChat(String cityId) {
-    _citySub?.cancel();
-    _citySub = _firestore
-        .collection('chats')
-        .doc(cityId)
-        .collection('messages')
-        .orderBy('timestamp', descending: false)
-        .snapshots()
-        .listen((snap) {
-      cityMessages = snap.docs.map(ChatMessage.fromDoc).toList();
-      notifyListeners();
-    });
-  }
+  // /// Inicia el listener para el chat de una ciudad (gremio)
+  // void initCityChat(String cityId) {
+  //   _citySub?.cancel();
+  //   _citySub = _firestore
+  //       .collection('chats')
+  //       .doc(cityId)
+  //       .collection('messages')
+  //       .orderBy('timestamp', descending: false)
+  //       .snapshots()
+  //       .listen((snap) {
+  //     cityMessages = snap.docs.map(ChatMessage.fromDoc).toList();
+  //     notifyListeners();
+  //   });
+  // }
 
   /// Envía un mensaje al chat global
   Future<void> sendGlobalMessage({
@@ -85,7 +85,7 @@ int get unreadGlobalCount => _messages.where((m) => !(m.data() as Map)['read'] a
     });
   }
 
-    Future<void> markAllGlobalRead() async {
+  Future<void> markAllGlobalRead() async {
     final batch = FirebaseFirestore.instance.batch();
     for (var doc in _messages) {
       final data = doc.data() as Map<String, dynamic>;
