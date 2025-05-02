@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:guild/services/noti_services.dart';
+import 'package:guild/utils/errorcases.dart';
 import '../data/unit_catalog.dart';
 import '../models/unit_type.dart';
 
@@ -20,43 +25,72 @@ class _QueueItem {
 
 class BarracksViewModel extends ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-
+ bool _isForeground = true;
+  set isForeground(bool v) => _isForeground = v;
   // Local state
   final List<_QueueItem> _queue = [];
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _queueSub;
+
+  /// Cola de entrenamiento expuesta a la UI
+  List<_QueueItem> get queue => List.unmodifiable(_queue);
   final Map<String, int> _army = {};
 
   /// Máximo de entrenamientos concurrentes
   int maxConcurrentTraining = 1;
 
-  List<_QueueItem> get queue => List.unmodifiable(_queue);
   Map<String, int> get army => _army;
 
-  /// Initialize listeners for this user
-  void initForUser(String uid) {
-    _listenQueue(uid);
-    _listenArmy(uid);
-  }
-
-  // Listen to pending training queue
-  void _listenQueue(String uid) {
-    _db
-        .collection('users').doc(uid)
+   void initForUser(String uid) {
+    // 1️⃣ Listener de la cola de entrenamiento
+    _queueSub?.cancel();
+    _queueSub = _db
+        .collection('users')
+        .doc(uid)
         .collection('barracksQueue')
         .snapshots()
         .listen((snap) {
+      for (var change in snap.docChanges) {
+        if (change.type == DocumentChangeType.removed) {
+          // Solo notificar si no estamos en primer plano
+          if (!_isForeground) {
+            final data = change.doc.data()!;
+            final unit = kUnitCatalog[data['unitId']]!;
+            final qty = data['qty'] as int;
+            NotificationService.instance.showImmediate(
+              id: change.doc.id.hashCode,
+              title: 'Entrenamiento terminado',
+              body: 'Tu ${unit.name} x$qty ya está listo.',
+              assetPath: unit.imagePath,
+            );
+          }
+        }
+      }
+
+      // Actualizar lista local y refrescar UI
       _queue
         ..clear()
         ..addAll(snap.docs.map((d) {
-          final data = d.data() as Map<String, dynamic>?;
+          final m = d.data();
           return _QueueItem(
             docId: d.id,
-            unitId: data?['unitId'] as String,
-            qty: data?['qty'] as int? ?? 0,
-            readyAt: (data?['readyAt'] as Timestamp).toDate(),
+            unitId: m['unitId'] as String,
+            qty: m['qty'] as int,
+            readyAt: (m['readyAt'] as Timestamp).toDate(),
           );
         }));
       notifyListeners();
+    }, onError: (e) {
+      if (kDebugMode) print('Error escuchando la cola: $e');
     });
+
+    // 2️⃣ Conserva tu listener de ejército (si existía)
+    _listenArmy(uid);
+  }
+
+  @override
+  void dispose() {
+    _queueSub?.cancel();
+    super.dispose();
   }
 
   // Listen to user's army field
@@ -113,59 +147,109 @@ class BarracksViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Enqueue training, deducting resources
-  Future<void> trainUnit(String uid, String unitId, int qty) async {
-    // 1) Verificar límite concurrente
-    if (_queue.length >= maxConcurrentTraining) {
-      throw Exception(
-        'Límite de entrenamientos alcanzado ' 
-        '(${_queue.length}/$maxConcurrentTraining).'
-      );
-    }
-
-    final unit = kUnitCatalog[unitId]!;
-    final cost = unit.costScaled(qty);
-    final resCol = _db.collection('users').doc(uid).collection('resources');
-
-    final resources = await _getCurrentResources(resCol);
-    if (!resources.hasEnough(cost)) {
-      throw Exception('Recursos insuficientes');
-    }
-
-    final readyAt = DateTime.now().add(
-      Duration(seconds: unit.baseTrainSecs * qty)
+/// Enqueue training, deducting resources
+Future<void> trainUnit(String uid, String unitId, int qty) async {
+  // 1) Límite concurrente
+  if (_queue.length >= maxConcurrentTraining) {
+    throw MaxTrainingReachedException(
+      'Límite de entrenamientos alcanzado (${_queue.length}/$maxConcurrentTraining).'
     );
+  }
 
-    // 2) Transacción: deducir y crear doc en Firestore
-    final queueRef = _db
+  // 2) Recursos y readyAt
+  final unit = kUnitCatalog[unitId]!;
+  final cost = unit.costScaled(qty);
+  final resCol = _db.collection('users').doc(uid).collection('resources');
+  final resources = await _getCurrentResources(resCol);
+  if (!resources.hasEnough(cost)) {
+    throw InsufficientResourcesException(
+      'No tienes suficientes recursos para entrenar ${unit.name} x$qty.'
+    );
+  }
+  final readyAt = DateTime.now().add(
+    Duration(seconds: unit.baseTrainSecs * qty)
+  );
+
+  // 3) Transacción: deducir recursos y crear la orden
+  final queueRef = _db
+      .collection('users')
+      .doc(uid)
+      .collection('barracksQueue')
+      .doc();
+  await _db.runTransaction((tx) async {
+    _deductResources(tx, resCol, resources, cost);
+    tx.set(queueRef, {
+      'unitId': unitId,
+      'qty': qty,
+      'readyAt': Timestamp.fromDate(readyAt),
+    });
+  });
+
+  // 4) Agenda + persiste la notificación (resistente a cierre de app)
+  try {
+    await NotificationService.instance.scheduleTrainingDone(
+      id: queueRef.id.hashCode,
+      title: 'Entrenamiento completado',
+      body: 'Tu ${unit.name} x$qty está listo.',
+      finishTime: readyAt,
+      assetPath: unit.imagePath,
+    );
+  } catch (e) {
+    debugPrint('Error programando noti: $e');
+  }
+
+  // 5) Timer local para procesar el fin del entrenamiento
+  final delay = readyAt.difference(DateTime.now());
+  Timer(delay, () async {
+    // 5.1) Borra la orden de la cola
+    try {
+      await _db
         .collection('users').doc(uid)
         .collection('barracksQueue')
-        .doc();
+        .doc(queueRef.id)
+        .delete();
+    } catch (e) {
+      debugPrint('Error eliminando orden tras timer: $e');
+    }
 
-    await _db.runTransaction((tx) async {
-      _deductResources(tx, resCol, resources, cost);
-      tx.set(queueRef, {
-        'unitId': unitId,
-        'qty': qty,
-        'readyAt': readyAt,
+    // 5.2) Incrementa el army en Firestore
+    try {
+      await _db.runTransaction((tx) async {
+        final userRef = _db.collection('users').doc(uid);
+        final snap    = await tx.get(userRef);
+        final data    = snap.data() as Map<String, dynamic>? ?? {};
+        final armyMap = Map<String, dynamic>.from(data['army'] ?? {});
+        final prev    = (armyMap[unitId] as int?) ?? 0;
+        armyMap[unitId] = prev + qty;
+        tx.update(userRef, {'army': armyMap});
       });
-    });
+    } catch (e) {
+      debugPrint('Error actualizando army tras timer: $e');
+    }
 
-    // 3) Actualizar cola local inmediatamente
-    _queue.add(_QueueItem(
-      docId: queueRef.id,
-      unitId: unitId,
-      qty: qty,
-      readyAt: readyAt,
-    ));
+    // 5.3) Actualiza la UI local
+    _queue.removeWhere((item) => item.docId == queueRef.id);
+    _army[unitId] = (_army[unitId] ?? 0) + qty;
+    notifyListeners();
+  });
+
+  // 6) Añade la nueva orden a la cola local
+  final newItem = _QueueItem(
+    docId: queueRef.id,
+    unitId: unitId,
+    qty: qty,
+    readyAt: readyAt,
+  );
+  if (_queue.every((item) => item.docId != newItem.docId)) {
+    _queue.add(newItem);
     notifyListeners();
   }
+}
 
-  /// Para cuando el usuario compre un slot extra
-  void increaseMaxTraining(int extra) {
-    maxConcurrentTraining += extra;
-    notifyListeners();
-  }
+
+
+
+
 
   /// Complete trainings and add to user's army field
   Future<void> completeTrainings(String uid) async {
@@ -190,6 +274,11 @@ class BarracksViewModel extends ChangeNotifier {
     await batch.commit();
   }
 
+  /// Para cuando el usuario compre un slot extra
+  void increaseMaxTraining(int extra) {
+    maxConcurrentTraining += extra;
+    notifyListeners();
+  }
   /// Read current resources
   Future<_Resources> _getCurrentResources(CollectionReference col) async {
     final wSnap = await col.doc('wood').get();

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:guild/utils/errorcases.dart';
 import 'package:provider/provider.dart';
 import 'package:guild/data/unit_catalog.dart';
 import 'package:guild/models/unit_type.dart';
@@ -235,24 +236,47 @@ final entries = _vm.army.entries
               style: const TextStyle(color: Colors.white70)),
 
           const SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: _busy
-                ? null
-                : () async {
-                    setState(() => _busy = true);
-                    await _vm.trainUnit(uid, u.id, _qty);
-                    setState(() => _busy = false);
-                  },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-            child: _busy
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('⏳ Entrenar',
-                    style: TextStyle(color: Colors.black)),
-          ),
+         ElevatedButton(
+  onPressed: _busy
+      ? null
+      : () async {
+          setState(() => _busy = true);
+          try {
+            await _vm.trainUnit(uid, u.id, _qty);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Entrenamiento de ${u.name} x$_qty iniciado.'),
+              ),
+            );
+          } on InsufficientResourcesException catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(e.toString())),
+            );
+          } on MaxTrainingReachedException catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(e.toString())),
+            );
+          } catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error al iniciar entrenamiento: $e'),
+              ),
+            );
+          } finally {
+            setState(() => _busy = false);
+          }
+        },
+  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+  child: _busy
+      ? const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        )
+      : const Text('⏳ Entrenar',
+          style: TextStyle(color: Colors.black)),
+),
+
         ],
       ),
     );

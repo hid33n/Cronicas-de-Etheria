@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:guild/models/user_model.dart';
 import 'package:guild/viewmodels/auth/auth_service.dart';
@@ -57,32 +59,50 @@ _presence.goOnline(_user!.name);
     await _loadCurrentUser(cred.user!.uid);
   }
 
-  Future<void> signUp(
-      String name, String email, String password, String raceId) async {
-    // Validar nombre
-    final existingEmail = await _userRepo.getEmailByUsername(name);
-    if (existingEmail != null) {
-      throw Exception('El nombre de aventurero "$name" ya está en uso.');
-    }
 
-    final cred = await _authSvc.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    final uid = cred.user!.uid;
 
-    // Crear documento con datos iniciales
-    await _userRepo.updateFields(uid, {
-      'name': name,
-      'email': email.trim(),
-      'cityId': null,
-      'gold': 0,
-      'race': raceId,
-      'avatarUrl': '',
-      'missionsCompleted': 0,
-      'achievements': <String>[],
-      'eloRating': 1000,
-    });
+Future<void> signUp(
+  String name,
+  String email,
+  String password,
+  String raceId,
+) async {
+  // 1) Validar nombre
+  final existingEmail = await _userRepo.getEmailByUsername(name);
+  if (existingEmail != null) {
+    throw Exception('El nombre de aventurero "$name" ya está en uso.');
+  }
+
+  // 2) Crear cuenta en Firebase Auth
+  final cred = await _authSvc.createUserWithEmailAndPassword(
+    email: email,
+    password: password,
+  );
+  final uid = cred.user!.uid;
+
+  // 3) Obtener token FCM
+  final fcmToken = await FirebaseMessaging.instance.getToken();
+
+  // 4) Crear documento con datos iniciales + token
+  final initialData = {
+    'name': name,
+    'email': email.trim(),
+    'cityId': null,
+    'gold': 0,
+    'race': raceId,
+    'avatarUrl': '',
+    'missionsCompleted': 0,
+    'achievements': <String>[],
+    'eloRating': 1000,
+    // si querés meter el token en un array
+    if (fcmToken != null) 'fcmTokens': FieldValue.arrayUnion([fcmToken]),
+  };
+
+  await _userRepo.updateFields(uid, initialData);
+
+
+
+
 
     // Luego _loadCurrentUser creará los edificios y recursos si hace falta
     await _loadCurrentUser(uid);

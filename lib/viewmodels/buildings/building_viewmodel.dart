@@ -8,9 +8,12 @@ import 'package:flutter/foundation.dart';
 import 'package:guild/data/building_catalog.dart';
 import 'package:guild/data/unit_catalog.dart';
 import 'package:guild/models/unit_type.dart';
+import 'package:guild/services/noti_services.dart';
+import 'package:guild/utils/errorcases.dart';
 
 class BuildingViewModel extends ChangeNotifier {
   final _userCol = FirebaseFirestore.instance.collection('users');
+final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   Map<String, int> _levels = {};
   Map<String, DateTime?> _queue = {};
@@ -84,73 +87,98 @@ class BuildingViewModel extends ChangeNotifier {
     };
   }
 
- Future<String?> upgrade(String uid, String buildingId) async {
-  final userDocRef     = _userCol.doc(uid);
-  final bldDocRef      = userDocRef.collection('buildings').doc(buildingId);
-  final resColRef      = userDocRef.collection('resources');
-  final bType          = kBuildingCatalog[buildingId]!;
-  final currentLevel   = _levels[buildingId] ?? 1;
-  final nextLevel      = currentLevel + 1;
-  final timeSecs       = bType.baseCostTime * nextLevel;
-  final readyDateTime  = DateTime.now().add(Duration(seconds: timeSecs));
-  final readyTimestamp = Timestamp.fromDate(readyDateTime);
-   // ── 1) Control de límite ─────────────────
-    if (!canStartUpgrade) {
-      return '🚧 Solo puedes mejorar hasta '
-           '$maxConcurrentUpgrades edificios a la vez.';
-    }
 
-  // 1) Optimistic UI: dibujo la cola inmediatamente
+
+/// Programa la mejora de un edificio y agenda notificaciones/local UI.
+Future<String?> upgrade(String uid, String buildingId) async {
+  final userDocRef    = _userCol.doc(uid);
+  final bldDocRef     = userDocRef.collection('buildingUpgrades').doc(buildingId);
+  final resColRef     = userDocRef.collection('resources');
+  final bType         = kBuildingCatalog[buildingId]!;
+  final currentLevel  = _levels[buildingId] ?? 1;
+  final nextLevel     = currentLevel + 1;
+  final timeSecs      = bType.baseCostTime * nextLevel;
+  final readyDateTime = DateTime.now().add(Duration(seconds: timeSecs));
+  final readyTs       = Timestamp.fromDate(readyDateTime);
+
+  // 0) Límite de mejoras concurrentes
+  if (!canStartUpgrade) {
+    throw MaxUpgradeReachedException(
+      'Solo puedes mejorar hasta $maxConcurrentUpgrades edificios a la vez.'
+    );
+  }
+
+  // Optimistic UI
   _queue[buildingId] = readyDateTime;
   notifyListeners();
 
   try {
-    await FirebaseFirestore.instance.runTransaction((tx) async {
-      // 2) Lectura de recursos
+    // 1) Transacción: deduce recursos y programa la mejora
+    await _db.runTransaction((tx) async {
       final woodSnap  = await tx.get(resColRef.doc('wood'));
       final stoneSnap = await tx.get(resColRef.doc('stone'));
       final foodSnap  = await tx.get(resColRef.doc('food'));
 
-      final currWood  = (woodSnap.data()?['qty'] as int?) ?? 0;
-      final currStone = (stoneSnap.data()?['qty'] as int?) ?? 0;
-      final currFood  = (foodSnap.data()?['qty'] as int?) ?? 0;
+      final currWood   = (woodSnap.data()?['qty']  as int?) ?? 0;
+      final currStone  = (stoneSnap.data()?['qty'] as int?) ?? 0;
+      final currFood   = (foodSnap.data()?['qty']  as int?) ?? 0;
 
-      // 3) Cálculo de costes
-      final woodCost   = bType.baseCostWood  * nextLevel;
-      final stoneCost  = bType.baseCostStone * nextLevel;
-      final foodCost   = bType.baseCostFood  * nextLevel;
+      final woodCost  = bType.baseCostWood  * nextLevel;
+      final stoneCost = bType.baseCostStone * nextLevel;
+      final foodCost  = bType.baseCostFood  * nextLevel;
 
       if (currWood < woodCost || currStone < stoneCost || currFood < foodCost) {
-        throw Exception('No tienes recursos suficientes.');
+        throw InsufficientUpgradeResourcesException(
+          'No tienes recursos suficientes para mejorar ${bType.name} a nivel $nextLevel.'
+        );
       }
 
-      // 4) Restar recursos
+      // Resto los recursos
       tx.update(resColRef.doc('wood'),  {'qty': currWood  - woodCost});
       tx.update(resColRef.doc('stone'), {'qty': currStone - stoneCost});
       tx.update(resColRef.doc('food'),  {'qty': currFood  - foodCost});
 
-      // 5) Programar la mejora en Firestore
-      tx.set(
-        bldDocRef,
-        {
-          // nivel provisional (mantiene el nivel actual hasta completar)
-          'level': currentLevel,
-          'readyAt': readyTimestamp,
-        },
-        SetOptions(merge: true),
-      );
+      // Programo la mejora
+      tx.set(bldDocRef, {
+        'level': currentLevel,
+        'readyAt': readyTs,
+        'buildingName': bType.name,
+        'assetPath': bType.assetPath,
+      }, SetOptions(merge: true));
 
-      // 6) Guardar el objetivo en meta.upgrading
-      tx.update(
-        userDocRef,
-        { 'meta.upgrading.$buildingId': nextLevel },
-      );
+      // Marco en meta.upgrading
+      tx.update(userDocRef, {
+        'meta.upgrading.$buildingId': nextLevel,
+      });
     });
 
-    // 7) Finalmente, devolvemos éxito
+    // 2) Agenda notificación persistente
+    await NotificationService.instance.scheduleBuildingDone(
+      id: bldDocRef.id.hashCode,
+      buildingName: bType.name,
+      finishTime: readyDateTime,
+      assetPath: bType.assetPath,
+    );
+
+    // 3) Timer local para limpiar y actualizar UI justo al vencer
+    final delay = readyDateTime.difference(DateTime.now());
+    Timer(delay, () async {
+      // Borro la entrada de buildingUpgrades
+      await _db
+        .collection('users').doc(uid)
+        .collection('buildingUpgrades')
+        .doc(buildingId)
+        .delete();
+
+      // Actualizo nivel local
+      _levels[buildingId] = nextLevel;
+      _queue.remove(buildingId);
+      notifyListeners();
+    });
+
     return null;
   } catch (e) {
-    // 8) Si falla la transacción, quito la cola optimista
+    // Falla la transacción o scheduling
     _queue.remove(buildingId);
     notifyListeners();
     return e.toString().replaceAll('Exception: ', '');

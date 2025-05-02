@@ -3,12 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:guild/screens/create_guild_screen.dart';
 import 'package:guild/screens/guild_screen/guild_screen.dart';
 import 'package:guild/screens/guild_list_screen.dart';
-
 import 'package:guild/screens/homescreen/home_screen.dart';
 import 'package:guild/screens/missions_screen.dart';
 import 'package:guild/screens/pvp_info_screen.dart';
 import 'package:guild/screens/profile/profile_screen.dart';
 import '../viewmodels/auth/auth_viewmodel.dart';
+import '../viewmodels/barracks_viewmodel.dart'; // importa tu BarracksViewModel
 
 /// Pantalla principal con navegación inferior estilo RPG.
 class MainNavScreen extends StatefulWidget {
@@ -19,13 +19,32 @@ class MainNavScreen extends StatefulWidget {
   _MainNavScreenState createState() => _MainNavScreenState();
 }
 
-class _MainNavScreenState extends State<MainNavScreen> {
+class _MainNavScreenState extends State<MainNavScreen>
+    with WidgetsBindingObserver {
   late int _currentIndex;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
+    // Nos suscribimos a los cambios de estado de la app
+    WidgetsBinding.instance.addObserver(this);
+    // Al inicio, asumimos que estamos en primer plano
+    context.read<BarracksViewModel>().isForeground = true;
+  }
+
+  @override
+  void dispose() {
+    // Quitamos la escucha
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Cuando la app entra o sale de foreground
+    final isFg = state == AppLifecycleState.resumed;
+    context.read<BarracksViewModel>().isForeground = isFg;
   }
 
   @override
@@ -34,7 +53,7 @@ class _MainNavScreenState extends State<MainNavScreen> {
     final hasGuild = authVm.user?.cityId != null;
     final guildId  = authVm.user?.cityId;
 
-    // Ahora las páginas se vuelven a calcular en cada build:
+    // Las páginas según índice
     final pages = [
       MissionsScreen(),                            // 0
       hasGuild                                     // 1
@@ -48,7 +67,6 @@ class _MainNavScreenState extends State<MainNavScreen> {
     return Scaffold(
       extendBody: true,
       extendBodyBehindAppBar: true,
-      // 2️⃣ Pon el Scaffold transparente
       backgroundColor: Colors.transparent,
       body: IndexedStack(index: _currentIndex, children: pages),
       bottomNavigationBar: _GameNavBar(
