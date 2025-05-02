@@ -232,18 +232,17 @@ Future<String?> upgrade(String uid, String buildingId) async {
 /// Cancela la mejora pendiente de [buildingId] y devuelve el 50% de los recursos.
 Future<void> cancelUpgrade(String uid, String buildingId) async {
   final userDoc = _userCol.doc(uid);
-  final bDoc    = userDoc.collection('buildings').doc(buildingId);
+  final upgDoc  = userDoc.collection('buildingUpgrades').doc(buildingId);
   final bType   = kBuildingCatalog[buildingId]!;
 
-  // Leemos el meta para saber el nivel objetivo
-  final userSnap = await userDoc.get();
-  final meta = (userSnap.data()?['meta'] as Map<String, dynamic>?)?['upgrading']
-      as Map<String, dynamic>?;
+  // Lectura de la mejora pendiente
+  final snap = await upgDoc.get();
+  if (!snap.exists) return;
 
-  final targetLvl = meta?[buildingId] as int?;
-  if (targetLvl == null) return; // no hay mejora pendiente
+  final data      = snap.data()!;
+  final targetLvl = data['level'] as int? ?? (_levels[buildingId] ?? 1) + 1;
 
-  // Calculamos costes y refund al 50%
+  // Calculamos el 50% de refund
   final woodCost  = bType.baseCostWood  * targetLvl;
   final stoneCost = bType.baseCostStone * targetLvl;
   final foodCost  = bType.baseCostFood  * targetLvl;
@@ -253,20 +252,25 @@ Future<void> cancelUpgrade(String uid, String buildingId) async {
   final refundFood  = (foodCost  * 0.5).floor();
 
   final resCol = userDoc.collection('resources');
-  final batch = FirebaseFirestore.instance.batch();
+  final batch  = FirebaseFirestore.instance.batch();
 
   // Devolvemos recursos
   batch.update(resCol.doc('wood'),  {'qty': FieldValue.increment(refundWood)});
   batch.update(resCol.doc('stone'), {'qty': FieldValue.increment(refundStone)});
   batch.update(resCol.doc('food'),  {'qty': FieldValue.increment(refundFood)});
 
-  // Limpiamos la cola de mejora
-  batch.update(bDoc, {'readyAt': null});              // quita timestamp
+  // Borramos la entrada de buildingUpgrades
+  batch.delete(upgDoc);
+
+  // Limpiamos meta.upgrading
   batch.update(userDoc, {
-    'meta.upgrading.$buildingId': FieldValue.delete(), // quita meta
+    'meta.upgrading.$buildingId': FieldValue.delete(),
   });
 
   await batch.commit();
+
+  // UI local
+  _queue.remove(buildingId);
   notifyListeners();
 }
 
