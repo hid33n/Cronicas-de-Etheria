@@ -50,6 +50,11 @@ dependencies:
   ionicons: ^0.2.2
   icony: ^1.0.5
   firebase_database: ^11.3.5
+  firebase_messaging:
+  flutter_local_notifications: ^19.1.0
+  flutter_timezone: 
+  timezone: ^0.10.1
+  shared_preferences: ^2.5.3
 dev_dependencies:
   flutter_test:
     sdk: flutter
