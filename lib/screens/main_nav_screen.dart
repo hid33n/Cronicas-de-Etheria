@@ -9,7 +9,7 @@ import 'package:guild/screens/pvp_info_screen.dart';
 import 'package:guild/screens/profile/profile_screen.dart';
 import '../viewmodels/auth/auth_viewmodel.dart';
 import '../viewmodels/barracks_viewmodel.dart'; // importa tu BarracksViewModel
-
+import '../viewmodels/buildings/building_viewmodel.dart';
 /// Pantalla principal con navegación inferior estilo RPG.
 class MainNavScreen extends StatefulWidget {
   final int initialIndex;
@@ -31,6 +31,8 @@ class _MainNavScreenState extends State<MainNavScreen>
     WidgetsBinding.instance.addObserver(this);
     // Al inicio, asumimos que estamos en primer plano
     context.read<BarracksViewModel>().isForeground = true;
+    context.read<BuildingViewModel>().isForeground = true;
+
   }
 
   @override

@@ -14,7 +14,8 @@ import 'package:guild/utils/errorcases.dart';
 class BuildingViewModel extends ChangeNotifier {
   final _userCol = FirebaseFirestore.instance.collection('users');
 final FirebaseFirestore _db = FirebaseFirestore.instance;
-
+ bool _isForeground = true;
+  set isForeground(bool v) => _isForeground = v;
   Map<String, int> _levels = {};
   Map<String, DateTime?> _queue = {};
   Map<String, int> _resources = {};
@@ -37,30 +38,74 @@ final FirebaseFirestore _db = FirebaseFirestore.instance;
   /// Indica si podemos arrancar una nueva mejora.
   bool get canStartUpgrade =>
     pendingUpgradeCount < maxConcurrentUpgrades;
-  /// Escucha niveles, cola de mejoras y recursos para un usuario
-  void listenData(String uid) {
-    _bSub?.cancel();
-    _rSub?.cancel();
+void listenData(String uid) {
+  // 1️⃣ Cancela suscripciones previas
+  _bSub?.cancel();
+  _rSub?.cancel();
 
-    _bSub = _userCol.doc(uid).collection('buildings').snapshots().listen((snap) {
-      _levels = {};
-      _queue = {};
-      for (var d in snap.docs) {
-        final data = d.data();
-        _levels[d.id] = (data['level'] as int?) ?? 1;
-        final ts = data['readyAt'] as Timestamp?;
-        _queue[d.id] = ts?.toDate();
+  // 2️⃣ Copia previa de readyAt para detectar completados
+  Map<String, DateTime?> previousReadyAt = Map.from(_queue);
+
+  // 3️⃣ Listener de buildings/{uid}/buildings
+  _bSub = _userCol
+      .doc(uid)
+      .collection('buildings')
+      .snapshots()
+      .listen((snap) {
+    final newLevels = <String, int>{};
+    final newQueue = <String, DateTime?>{};
+    final now = DateTime.now();
+
+    // Reconstruye niveles y readyAts
+    for (var d in snap.docs) {
+      final data = d.data();
+      newLevels[d.id] = (data['level'] as int?) ?? 1;
+      newQueue[d.id] = (data['readyAt'] as Timestamp?)?.toDate();
+    }
+
+    // Detecta qué edificios pasaron de pending a done
+    for (var entry in previousReadyAt.entries) {
+      final bid = entry.key;
+      final oldReady = entry.value;
+      final newReady = newQueue[bid];
+
+      final wasPending = oldReady != null && oldReady.isAfter(now);
+      final nowDone = newReady == null || newReady.isBefore(now);
+
+      if (wasPending && nowDone && !_isForeground) {
+        final bType = kBuildingCatalog[bid]!;
+        NotificationService.instance.showImmediate(
+          id: bid.hashCode + 100000,
+          title: 'Mejora completada',
+          body: 'Tu ${bType.name} ya está lista.',
+          assetPath: bType.assetPath,
+        );
       }
-      notifyListeners();
-    });
+    }
 
-    _rSub = _userCol.doc(uid).collection('resources').snapshots().listen((snap) {
-      _resources = {
-        for (var d in snap.docs) d.id: (d.data()['qty'] as int? ?? 0)
-      };
-      notifyListeners();
-    });
-  }
+    // Actualiza el estado interno y previene duplicados
+    _levels = newLevels;
+    _queue = newQueue;
+    previousReadyAt = Map.from(newQueue);
+
+    notifyListeners();
+  });
+
+  // 4️⃣ Listener de recursos
+  _rSub = _userCol
+      .doc(uid)
+      .collection('resources')
+      .snapshots()
+      .listen((snap) {
+    _resources = {
+      for (var d in snap.docs) d.id: (d.data()['qty'] as int? ?? 0)
+    };
+    notifyListeners();
+  });
+}
+
+/// Recuerda exponer isForeground para que tu MainNavScreen lo actualice:
+
   void increaseMaxUpgrades(int extra) {
     maxConcurrentUpgrades += extra;
     notifyListeners();
@@ -86,13 +131,12 @@ final FirebaseFirestore _db = FirebaseFirestore.instance;
           entry.key: entry.value!.difference(now),
     };
   }
+/// Dentro de tu BuildingViewModel:
 
-
-
-/// Programa la mejora de un edificio y agenda notificaciones/local UI.
+/// Programa la mejora de un edificio y agenda la notificación persistente
 Future<String?> upgrade(String uid, String buildingId) async {
   final userDocRef    = _userCol.doc(uid);
-  final bldDocRef     = userDocRef.collection('buildingUpgrades').doc(buildingId);
+  final bldDocRef     = userDocRef.collection('buildings').doc(buildingId);
   final resColRef     = userDocRef.collection('resources');
   final bType         = kBuildingCatalog[buildingId]!;
   final currentLevel  = _levels[buildingId] ?? 1;
@@ -108,20 +152,20 @@ Future<String?> upgrade(String uid, String buildingId) async {
     );
   }
 
-  // Optimistic UI
+  // 1) Optimistic UI: dibuja el readyAt inmediatamente
   _queue[buildingId] = readyDateTime;
   notifyListeners();
 
   try {
-    // 1) Transacción: deduce recursos y programa la mejora
+    // 2) Transacción: deducir recursos y fijar readyAt en Firestore
     await _db.runTransaction((tx) async {
       final woodSnap  = await tx.get(resColRef.doc('wood'));
       final stoneSnap = await tx.get(resColRef.doc('stone'));
       final foodSnap  = await tx.get(resColRef.doc('food'));
 
-      final currWood   = (woodSnap.data()?['qty']  as int?) ?? 0;
-      final currStone  = (stoneSnap.data()?['qty'] as int?) ?? 0;
-      final currFood   = (foodSnap.data()?['qty']  as int?) ?? 0;
+      final currWood  = (woodSnap.data()?['qty']  as int?) ?? 0;
+      final currStone = (stoneSnap.data()?['qty'] as int?) ?? 0;
+      final currFood  = (foodSnap.data()?['qty']  as int?) ?? 0;
 
       final woodCost  = bType.baseCostWood  * nextLevel;
       final stoneCost = bType.baseCostStone * nextLevel;
@@ -133,44 +177,36 @@ Future<String?> upgrade(String uid, String buildingId) async {
         );
       }
 
-      // Resto los recursos
+      // Restar recursos
       tx.update(resColRef.doc('wood'),  {'qty': currWood  - woodCost});
       tx.update(resColRef.doc('stone'), {'qty': currStone - stoneCost});
       tx.update(resColRef.doc('food'),  {'qty': currFood  - foodCost});
 
-      // Programo la mejora
-      tx.set(bldDocRef, {
-        'level': currentLevel,
+      // Fijar readyAt
+      tx.update(bldDocRef, {
         'readyAt': readyTs,
-        'buildingName': bType.name,
-        'assetPath': bType.assetPath,
-      }, SetOptions(merge: true));
-
-      // Marco en meta.upgrading
-      tx.update(userDocRef, {
-        'meta.upgrading.$buildingId': nextLevel,
       });
     });
 
-    // 2) Agenda notificación persistente
+    // 3) Agenda la notificación persistente (funcionará en background)
+    debugPrint('🔔 upgrade: scheduling building noti for $buildingId at $readyDateTime');
     await NotificationService.instance.scheduleBuildingDone(
       id: bldDocRef.id.hashCode,
       buildingName: bType.name,
       finishTime: readyDateTime,
       assetPath: bType.assetPath,
     );
+    debugPrint('✅ upgrade: scheduleBuildingDone called for $buildingId');
 
-    // 3) Timer local para limpiar y actualizar UI justo al vencer
+    // 4) Timer local para actualizar nivel y limpiar readyAt en cliente
     final delay = readyDateTime.difference(DateTime.now());
     Timer(delay, () async {
-      // Borro la entrada de buildingUpgrades
-      await _db
-        .collection('users').doc(uid)
-        .collection('buildingUpgrades')
-        .doc(buildingId)
-        .delete();
-
-      // Actualizo nivel local
+      debugPrint('⏰ upgrade: timer fired for $buildingId');
+      await bldDocRef.update({
+        'level': nextLevel,
+        'readyAt': null,
+      });
+      // Actualiza tu estado local
       _levels[buildingId] = nextLevel;
       _queue.remove(buildingId);
       notifyListeners();
@@ -178,12 +214,13 @@ Future<String?> upgrade(String uid, String buildingId) async {
 
     return null;
   } catch (e) {
-    // Falla la transacción o scheduling
+    // Si algo falla, revertir UI optimista
     _queue.remove(buildingId);
     notifyListeners();
     return e.toString().replaceAll('Exception: ', '');
   }
 }
+
 
 
   Future<void> completeUpgrades(String uid) async {

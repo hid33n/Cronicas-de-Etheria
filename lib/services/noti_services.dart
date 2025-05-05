@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:path_provider/path_provider.dart';
@@ -69,8 +70,9 @@ class NotificationService {
     tz.setLocalLocation(tz.getLocation(tzName));
 
     // 2️⃣ Crear canal en Android 8+
-    await _flnp.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>()
+    await _flnp
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
       ?..createNotificationChannel(_androidChannel);
 
     // 3️⃣ Inicializar el plugin
@@ -80,7 +82,7 @@ class NotificationService {
         iOS: DarwinInitializationSettings(),
       ),
       onDidReceiveNotificationResponse: (resp) {
-        // Manejar tap si necesitas navegar
+        debugPrint('Notification tapped: ${resp.payload}');
       },
     );
 
@@ -95,7 +97,8 @@ class NotificationService {
   }
 
   /// Copia asset a temp y devuelve el path
-  Future<String> _copyAssetToFile(String assetPath, String filename) async {
+  Future<String> _copyAssetToFile(
+      String assetPath, String filename) async {
     final bytes = await _loadAssetBytes(assetPath);
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/$filename');
@@ -113,8 +116,10 @@ class NotificationService {
   }) async {
     // Prepara estilo BigPicture si el asset existe
     BigPictureStyleInformation? style;
+    String? picPathIos;
     try {
       final picPath = await _copyAssetToFile(assetPath, 'item_$id.png');
+      picPathIos = await _copyAssetToFile(assetPath, 'item_ios_$id.png');
       style = BigPictureStyleInformation(
         FilePathAndroidBitmap(picPath),
         largeIcon: FilePathAndroidBitmap(picPath),
@@ -126,6 +131,7 @@ class NotificationService {
     }
 
     final scheduledDate = tz.TZDateTime.from(finishTime, tz.local);
+    debugPrint('🗓️ Scheduling notification id=$id at $scheduledDate');
 
     await _flnp.zonedSchedule(
       id,
@@ -142,17 +148,17 @@ class NotificationService {
           styleInformation: style,
         ),
         iOS: DarwinNotificationDetails(
-          attachments: [
-            DarwinNotificationAttachment(
-              await _copyAssetToFile(assetPath, 'item_ios_$id.png'),
-            )
-          ],
+          attachments: style != null && picPathIos != null
+              ? [DarwinNotificationAttachment(picPathIos)]
+              : [],
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       payload: null,
       matchDateTimeComponents: null,
     );
+
+    debugPrint('✅ Notification scheduled id=$id');
 
     // Persiste en SharedPreferences
     final pending = _PendingNotification(
@@ -164,6 +170,21 @@ class NotificationService {
     );
     await _savePending(pending);
   }
+
+  /// Alias para mejoras de edificio, usando otro rango de IDs
+  Future<void> scheduleBuildingDone({
+    required int id,
+    required String buildingName,
+    required DateTime finishTime,
+    required String assetPath,
+  }) =>
+      scheduleTrainingDone(
+        id: id + 100000,
+        title: 'Mejora completada',
+        body: 'Tu $buildingName ya está lista.',
+        finishTime: finishTime,
+        assetPath: assetPath,
+      );
 
   /// Guarda notificación pendiente en SharedPreferences
   Future<void> _savePending(_PendingNotification p) async {
@@ -183,8 +204,7 @@ class NotificationService {
     for (var item in list) {
       final p = _PendingNotification.fromJson(jsonDecode(item));
       if (p.fireDate.isAfter(now)) {
-        // Re-agenda
-        scheduleTrainingDone(
+        await scheduleTrainingDone(
           id: p.id,
           title: p.title,
           body: p.body,
@@ -194,55 +214,44 @@ class NotificationService {
         remaining.add(item);
       }
     }
-    // Guarda solo las que quedan por disparar
     await prefs.setStringList('pendingNotis', remaining);
   }
 
-  /// Alias para mejoras de edificio, usando otro rango de IDs
-  Future<void> scheduleBuildingDone({
+  /// Muestra una notificación inmediata
+  Future<void> showImmediate({
     required int id,
-    required String buildingName,
-    required DateTime finishTime,
-    required String assetPath,
-  }) =>
-      scheduleTrainingDone(
-        id: id + 100000,
-        title: 'Mejora completada',
-        body: 'Tu $buildingName ya está lista.',
-        finishTime: finishTime,
-        assetPath: assetPath,
-      );
-      Future<void> showImmediate({
-  required int id,
-  required String title,
-  required String body,
-  String? assetPath,
-}) async {
-  BigPictureStyleInformation? style;
-  if (assetPath != null) {
-    try {
-      final pic      = await _copyAssetToFile(assetPath, 'imm_$id.png');
-      style = BigPictureStyleInformation(
-        FilePathAndroidBitmap(pic),
-        largeIcon: FilePathAndroidBitmap(pic),
-      );
-    } catch (_) {}
-  }
-  await _flnp.show(
-    id,
-    title,
-    body,
-    NotificationDetails(
-      android: AndroidNotificationDetails(
-        _androidChannel.id,
-        _androidChannel.name,
-        channelDescription: _androidChannel.description,
-        importance: Importance.high,
-        priority: Priority.high,
-        styleInformation: style,
+    required String title,
+    required String body,
+    String? assetPath,
+  }) async {
+    debugPrint('🚀 Showing immediate notification id=$id');
+    BigPictureStyleInformation? style;
+    if (assetPath != null) {
+      try {
+        final pic = await _copyAssetToFile(assetPath, 'imm_$id.png');
+        style = BigPictureStyleInformation(
+          FilePathAndroidBitmap(pic),
+          largeIcon: FilePathAndroidBitmap(pic),
+        );
+      } catch (_) {
+        style = null;
+      }
+    }
+    await _flnp.show(
+      id,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _androidChannel.id,
+          _androidChannel.name,
+          channelDescription: _androidChannel.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          styleInformation: style,
+        ),
+        iOS: DarwinNotificationDetails(),
       ),
-      iOS: DarwinNotificationDetails(),
-    ),
-  );
-}
+    );
+  }
 }
